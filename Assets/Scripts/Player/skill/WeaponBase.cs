@@ -13,16 +13,49 @@ public abstract class WeaponBase : MonoBehaviour
     [SerializeField] protected WeaponMotionData attackMotion;
     protected WeaponAnimationController weaponAnimator;
     protected WeaponVisualController weaponVisual;
+    public bool IsInitialized { get; private set; }
 
     public virtual void Initialize(WeaponDataSO data)
-    {   
-        currentHitRadius = data.hitRadius;
-        currentMaxHits = data.maxHits;
-        currentProjectileSpeed = data.projectileSpeed;
-
-        weaponAnimator = GetComponentInParent<WeaponAnimationController>();
-        weaponVisual = GetComponentInParent<WeaponVisualController>();
+    {
+        // Compatibility entry point until the controller handles failure explicitly.
+        if (!TryInitialize(data))
+            enabled = false;
     }
+    public bool TryInitialize(WeaponDataSO data)
+    {
+        if (IsInitialized)
+            return myData == data;
+
+        if (data == null)
+        {
+            Debug.LogError("Weapon data is missing.", this);
+            return false;
+        }
+
+        try
+        {
+            myData = data;
+            WeaponID = data.WeaponId;
+            CurrentLevel = 1;
+
+            currentHitRadius = data.hitRadius;
+            currentMaxHits = data.maxHits;
+            currentProjectileSpeed = data.projectileSpeed;
+
+            weaponAnimator = GetComponentInParent<WeaponAnimationController>();
+            weaponVisual = GetComponentInParent<WeaponVisualController>();
+
+            IsInitialized = InitializeWeapon(data);
+            return IsInitialized;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception, this);
+            return false;
+        }
+    }
+
+    protected abstract bool InitializeWeapon(WeaponDataSO data);
 
     // 플레이어의 Update에서 매 프레임 호출해줄 함수
     public abstract void OnUpdate();

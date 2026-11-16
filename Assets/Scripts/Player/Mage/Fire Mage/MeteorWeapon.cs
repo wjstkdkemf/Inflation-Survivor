@@ -25,11 +25,16 @@ public class MeteorWeapon : WeaponBase
     private readonly List<Vector3> candidatePositions = new List<Vector3>(200);
     private readonly List<int> densityResults = new List<int>(50);
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is MeteorWeaponSO MeteorData)
         {
-            base.Initialize(data);
+            if (MeteorData.MeteorPrefab == null ||
+                !MeteorData.MeteorPrefab.TryGetComponent<Meteor>(out _))
+            {
+                Debug.LogError("Meteor weapon requires a Meteor prefab.", this);
+                return false;
+            }
             
             currentMeteorNumber = MeteorData.MeteorNumber;
             currentCooldownTime = MeteorData.baseCooldown;
@@ -46,7 +51,10 @@ public class MeteorWeapon : WeaponBase
             this.WeaponID = data.WeaponId;
             
             cooldownTimer = 0f; 
+            return true;
         }
+        Debug.LogError("MeteorWeaponSO is required.", this);
+        return false;
     }
 
     public override void OnUpdate()

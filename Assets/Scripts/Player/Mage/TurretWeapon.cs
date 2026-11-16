@@ -28,12 +28,16 @@ public class TurretWeapon : WeaponBase
     private VolleyState waitingVolley;
 
     // 1. 초기화 (데이터 주입)
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
-        base.Initialize(data);
-
         if (data is TurretWeaponDataSO turretData)
         {
+            if (turretData.bulletPrefab == null ||
+                !turretData.bulletPrefab.TryGetComponent<TurretBullet>(out _))
+            {
+                Debug.LogError("Turret requires a TurretBullet prefab.", this);
+                return false;
+            }
             currentBulletNumber = turretData.bulletNumber;
             currentCooldown = turretData.baseCooldown;
             cooldownTimer = GetCooldown(currentCooldown);
@@ -52,8 +56,9 @@ public class TurretWeapon : WeaponBase
         else
         {
             Debug.LogError("잘못된 데이터! TurretWeaponDataSO가 필요합니다.");
+            return false;
         }
-
+        return true;
     }
 
     public override void OnUpdate()

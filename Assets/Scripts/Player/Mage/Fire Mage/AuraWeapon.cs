@@ -22,10 +22,16 @@ public class AuraWeapon : WeaponBase
         PlayerStatsCalculate.Instance.AttackChanged -= RefreshDamage;
     }
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is AuraDataSO auraData)
         {
+            if (auraData.auraPrefab == null ||
+                !auraData.auraPrefab.TryGetComponent<AuraZone>(out _))
+            {
+                Debug.LogError("Aura weapon requires an AuraZone prefab.", this);
+                return false;
+            }
             currentRadius = auraData.baseRadius;
             currentTickRate = auraData.tickRate;
             currentDamage = auraData.baseDamage;
@@ -50,8 +56,9 @@ public class AuraWeapon : WeaponBase
         else
         {
             Debug.LogError("잘못된 데이터! AuraDataSO가 필요합니다.");
+            return false;
         }
-
+        return true;
     }
 
     public override void OnUpdate()

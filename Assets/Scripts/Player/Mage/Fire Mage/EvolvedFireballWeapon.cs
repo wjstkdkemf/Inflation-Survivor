@@ -20,10 +20,16 @@ public class EvolvedFireballWeapon : WeaponBase
     private int pendingBullets = 0;
     private Enemy currentTarget;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is EvolvedFireballDataSO evoData)
         {
+            if (evoData.fireballPrefab == null ||
+                !evoData.fireballPrefab.TryGetComponent<EvolvedFireballProjectile>(out _))
+            {
+                Debug.LogError("Evolved fireball requires an EvolvedFireballProjectile prefab.", this);
+                return false;
+            }
             bulletNumber = evoData.bulletNumber;
             fireRate = evoData.baseCooldown;
             range = evoData.range;
@@ -45,8 +51,10 @@ public class EvolvedFireballWeapon : WeaponBase
         else
         {
             Debug.LogError("잘못된 데이터! EvolvedFireballDataSO가 필요합니다.");
+            return false;
         }
         cooldownTimer = 0f;
+        return true;
     }
 
     public override void OnUpdate()

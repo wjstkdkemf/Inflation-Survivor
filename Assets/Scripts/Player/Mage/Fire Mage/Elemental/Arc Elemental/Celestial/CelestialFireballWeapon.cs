@@ -29,10 +29,16 @@ public class CelestialFireballWeapon : WeaponBase
     private int pendingBullets = 0;
     private Enemy currentTarget;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is CelestialFireballSO evoData)
         {
+            if (evoData.fireballPrefab == null ||
+                !evoData.fireballPrefab.TryGetComponent<CelestialFireballProjectile>(out _))
+            {
+                Debug.LogError("Celestial fireball requires a CelestialFireballProjectile prefab.", this);
+                return false;
+            }
             bulletNumber = evoData.bulletNumber;
             fireRate = evoData.baseCooldown;
             range = evoData.range;
@@ -59,8 +65,10 @@ public class CelestialFireballWeapon : WeaponBase
         else
         {
             Debug.LogError("잘못된 데이터! CelestialFireballDataSO가 필요합니다.");
+            return false;
         }
         cooldownTimer = 0f;
+        return true;
     }
 
     public override void OnUpdate()

@@ -17,18 +17,19 @@ public class SpreadingFlameWeapon : WeaponBase
     private int pendingFlames;
     [SerializeField] private RangeCircleIndicator rangeIndicator;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (!(data is SpreadingFlameDataSO flameData))
         {
             Debug.LogError("SpreadingFlameWeapon requires SpreadingFlameDataSO.");
-            return;
+            return false;
         }
-
-        base.Initialize(data);
-
-        myData = data;
-        WeaponID = flameData.WeaponId;
+        if (flameData.flameEffectPrefab == null ||
+            !flameData.flameEffectPrefab.TryGetComponent<SpreadingFlameEffect>(out _))
+        {
+            Debug.LogError("Spreading flame requires a SpreadingFlameEffect prefab.", this);
+            return false;
+        }
         searchRadius = flameData.searchRadius;
         flameCount = Mathf.Max(1, flameData.flameCount);
         flameDuration = Mathf.Max(0.1f, flameData.flameDuration);
@@ -44,6 +45,7 @@ public class SpreadingFlameWeapon : WeaponBase
         attackMotion = flameData.attackMotion;
 
         SetupRangeIndicator();
+        return true;
     }
 
     public override void OnUpdate()

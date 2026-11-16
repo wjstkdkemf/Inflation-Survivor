@@ -41,20 +41,18 @@ public class BarrierWeapon : WeaponBase
     }
 
     // 1. 초기화
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (!(data is BarrierDataSO barrierData))
         {
             Debug.LogError("BarrierDataSO가 필요합니다.", this);
-            enabled = false;
-            return;
+            return false;
         }
 
         if (barrierData.barrierPrefab == null)
         {
             Debug.LogError("베리어 프리팹이 설정되지 않았습니다.", this);
-            enabled = false;
-            return;
+            return false;
         }
 
 
@@ -84,6 +82,7 @@ public class BarrierWeapon : WeaponBase
         isBarrierActive = false;
 
         ActivateBarrier();
+        return true;
     }
 
     // 2. 매 프레임 실행 (시간 체크)

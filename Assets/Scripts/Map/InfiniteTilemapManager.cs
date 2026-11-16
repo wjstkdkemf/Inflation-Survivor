@@ -40,7 +40,10 @@ public class InfiniteTilemapManager : MonoBehaviour
     private float chunkUpdateDelay = 0.5f;
     private float lastChunkUpdateTime;
     private bool isMapActive = false;
-
+    [SerializeField, Min(0.1f)] private float chunkRetryDelay = 1f;
+    [SerializeField, Min(0)] private int maxChunkRetries = 3;
+    private readonly Dictionary<Vector2Int, ChunkRetryState> chunkRetries = new();
+    private readonly List<Vector2Int> retryCoordinates = new();
     private HashSet<Vector2Int> requiredChunks = new HashSet<Vector2Int>();
     private List<Vector2Int> chunksToUnload = new List<Vector2Int>();
     private Vector2Int lastPlayerChunkCoord = Vector2Int.one * int.MaxValue;
@@ -48,6 +51,11 @@ public class InfiniteTilemapManager : MonoBehaviour
     private int currentMapSeed;
     [Header("Job System Grid Data")]
     public NativeParallelHashMap<Vector2Int, byte> globalWallMap;
+    private sealed class ChunkRetryState
+    {
+        public int RetryCount;
+        public float NextRetryTime;
+    }
     private void Awake()
     {
         Instance = this;
@@ -79,12 +87,16 @@ public class InfiniteTilemapManager : MonoBehaviour
                 GetStableChunkIndex(player.position.y, lastPlayerChunkCoord.y)
             );
 
+            bool mapChanged = false;
             if (playerChunkCoord != lastPlayerChunkCoord)
             {
-                UpdateChunks(playerChunkCoord); // 좌표를 인자로 넘김
-                mapChunkManager.OnMapChunkUpdated();
+                UpdateChunks(playerChunkCoord, true);
                 lastPlayerChunkCoord = playerChunkCoord;
+                mapChanged = true;
             }
+            mapChanged |= ProcessChunkRetries();
+            if (mapChanged)
+                mapChunkManager.OnMapChunkUpdated();
         }
     }
 
@@ -170,6 +182,7 @@ public class InfiniteTilemapManager : MonoBehaviour
             mapChunkManager.InvalidateMap();
 
         isMapActive = false;
+        chunkRetries.Clear();
         globalWallMap.Clear();
 
         List<Vector2Int> allActiveCoords = activeChunks.Keys.ToList();
@@ -275,7 +288,7 @@ public class InfiniteTilemapManager : MonoBehaviour
     }
 
     //Update()에서 분리, GC Alloc 최적화
-    private void UpdateChunks(Vector2Int playerChunkCoord)
+    private void UpdateChunks(Vector2Int playerChunkCoord, bool allowRetry = false)
     {
         // 재사용 컬렉션 초기화
         requiredChunks.Clear();
@@ -291,7 +304,10 @@ public class InfiniteTilemapManager : MonoBehaviour
 
                 if (!activeChunks.ContainsKey(chunkCoord))
                 {
-                    LoadChunk(chunkCoord);
+                    if (!allowRetry)
+                        LoadChunk(chunkCoord);
+                    else if (!chunkRetries.ContainsKey(chunkCoord))
+                        TryLoadChunk(chunkCoord);
                 }
             }
         }
@@ -313,7 +329,8 @@ public class InfiniteTilemapManager : MonoBehaviour
 
     private void LoadChunk(Vector2Int coord)
     {
-        if (currentTheme == null) return;
+        if (currentTheme == null)
+            throw new System.InvalidOperationException("Map theme is missing.");
 
         if (activeChunks.ContainsKey(coord)) return;
 
@@ -326,20 +343,91 @@ public class InfiniteTilemapManager : MonoBehaviour
 
         activeChunks.Add(coord, chunk);
 
-        chunk.transform.SetParent(transform);
-        chunk.transform.position = new Vector3(
-            coord.x * chunkSize, coord.y * chunkSize, 0);
-        chunk.SetActive(true);
-
-        GenerateChunkContent(chunk, coord);
-
-        TilemapGridChunk gridChunk = chunk.GetComponentInChildren<TilemapGridChunk>();
-        if (gridChunk != null)
+        try
         {
-            gridChunk.RegisterWallsToGlobalMap();
+            chunk.transform.SetParent(transform);
+            chunk.transform.position = new Vector3(
+                coord.x * chunkSize, coord.y * chunkSize, 0);
+            chunk.SetActive(true);
+
+            GenerateChunkContent(chunk, coord);
+
+            var gridChunk = chunk.GetComponentInChildren<TilemapGridChunk>();
+            if (gridChunk != null)
+                gridChunk.RegisterWallsToGlobalMap();
+        }
+        catch
+        {
+            activeChunks.Remove(coord);
+
+            if (chunk != null)
+            {
+                try
+                {
+                    var gridChunk =
+                        chunk.GetComponentInChildren<TilemapGridChunk>(true);
+
+                    if (gridChunk != null)
+                        gridChunk.UnregisterWallsFromGlobalMap();
+                }
+                finally
+                {
+                    chunk.SetActive(false);
+                    Destroy(chunk);
+                }
+            }
+
+            throw;
         }
     }
+    private bool TryLoadChunk(Vector2Int coord)
+    {
+        try
+        {
+            LoadChunk(coord);
+            chunkRetries.Remove(coord);
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            if (!chunkRetries.ContainsKey(coord))
+            {
+                chunkRetries.Add(coord, new ChunkRetryState
+                {
+                    RetryCount = 0,
+                    NextRetryTime = Time.time + chunkRetryDelay
+                });
+            }
 
+            Debug.LogError($"[Map] Chunk load failed: {coord}", this);
+            Debug.LogException(exception, this);
+            return false;
+        }
+    }
+    private bool ProcessChunkRetries()
+    {
+        bool changed = false;
+        retryCoordinates.Clear();
+        retryCoordinates.AddRange(chunkRetries.Keys);
+        foreach (var coord in retryCoordinates)
+        {
+            if (!requiredChunks.Contains(coord) || activeChunks.ContainsKey(coord))
+            {
+                chunkRetries.Remove(coord);
+                continue;
+            }
+            if (!chunkRetries.TryGetValue(coord, out var state))
+                continue;
+            if (state.RetryCount >= maxChunkRetries || Time.time < state.NextRetryTime)
+                continue;
+
+            state.RetryCount++;
+            state.NextRetryTime = Time.time + chunkRetryDelay;
+            if (TryLoadChunk(coord))
+                changed = true;
+        }
+        return changed;
+    }
     private void UnloadChunk(Vector2Int coord)
     {
         if (activeChunks.TryGetValue(coord, out GameObject chunk))
@@ -392,32 +480,49 @@ public class InfiniteTilemapManager : MonoBehaviour
     }
     private GameObject GetResourceFromPool(GameObject prefab, Vector3 localPosition, Transform parent)
     {
-        Queue<GameObject> pool;
-        
-        // 해당 프리팹의 풀이 있는지 확인, 없으면 새로 생성
-        if (!resourcePools.TryGetValue(prefab, out pool))
+        if (prefab == null || parent == null)
+            throw new System.ArgumentException(
+                "Resource prefab and parent must be valid.");
+
+        if (!resourcePools.TryGetValue(prefab, out var pool))
         {
             pool = new Queue<GameObject>();
-            resourcePools[prefab] = pool;
+            resourcePools.Add(prefab, pool);
         }
 
-        GameObject instance;
-        if (pool.Count > 0)
-        {
-            instance = pool.Dequeue(); // 풀에서 가져오기
-        }
-        else
-        {
-            // 풀이 비었으면 새로 생성 (예외 처리)
-            instance = Instantiate(prefab);
-            PooledResource pr = instance.AddComponent<PooledResource>();
-            pr.originalPrefab = prefab;
-        }
+        GameObject instance = null;
 
-        instance.transform.SetParent(parent);
-        instance.transform.localPosition = localPosition;
-        instance.SetActive(true);
-        return instance;
+        try
+        {
+            // Skip entries whose objects have already been destroyed.
+            while (pool.Count > 0 && instance == null)
+                instance = pool.Dequeue();
+
+            if (instance == null)
+                instance = Instantiate(prefab);
+
+            var resource = instance.GetComponent<PooledResource>();
+            if (resource == null)
+                resource = instance.AddComponent<PooledResource>();
+
+            resource.originalPrefab = prefab;
+
+            instance.transform.SetParent(parent);
+            instance.transform.localPosition = localPosition;
+            instance.SetActive(true);
+            return instance;
+        }
+        catch
+        {
+            if (instance != null)
+            {
+                instance.SetActive(false);
+                instance.transform.SetParent(null);
+                Destroy(instance);
+            }
+
+            throw;
+        }
     }
     
     private void ReturnChunkContentToPool(GameObject chunk)

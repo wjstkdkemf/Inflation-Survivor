@@ -9,22 +9,29 @@ public class TurretFireTrailOrbWeapon : FireTrailOrbWeapon
     private float projectileDamageScaling;
     private float projectileSpeed;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
-        base.Initialize(data);
-
-        if (data is TurretFireTrailOrbDataSO turretData)
+        if (!(data is TurretFireTrailOrbDataSO turretData))
         {
-            projectilePrefab = turretData.projectilePrefab;
-            fireRate = turretData.baseCooldown;
-            fireRange = turretData.fireRange;
-            projectileDamageScaling = turretData.projectileDamageScaling;
-            projectileSpeed = turretData.projectileSpeed;
-
-            this.WeaponID = turretData.WeaponId;
+            Debug.LogError("TurretFireTrailOrbDataSO is required.", this);
+            return false;
+        }
+        if (turretData.orbProjectilePrefab == null ||
+            !turretData.orbProjectilePrefab.TryGetComponent<TurretFireTrailOrb>(out _) ||
+            turretData.projectilePrefab == null ||
+            !turretData.projectilePrefab.TryGetComponent<TurretBullet>(out _))
+        {
+            Debug.LogError("Turret orb requires TurretFireTrailOrb and TurretBullet prefabs.", this);
+            return false;
         }
 
-        UpdateTurretInfoForExistingOrbs();
+        // Populate derived settings before the base creates the orbs.
+        projectilePrefab = turretData.projectilePrefab;
+        fireRate = turretData.baseCooldown;
+        fireRange = turretData.fireRange;
+        projectileDamageScaling = turretData.projectileDamageScaling;
+        projectileSpeed = turretData.projectileSpeed;
+        return base.InitializeWeapon(data);
     }
 
     protected override void SetupSpawnedOrb(GameObject orb)

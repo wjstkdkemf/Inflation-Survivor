@@ -83,9 +83,9 @@ public class PlayerWeaponController : MonoBehaviour
             return;
 
         foreach (WeaponBase weapon in activeWeapons)
-            if (weapon != null && weapon.gameObject.activeInHierarchy) weapon.OnUpdate();
+            if (weapon != null && weapon.isActiveAndEnabled) weapon.OnUpdate();
         foreach (WeaponBase weapon in WeaponsFromEquipment)
-            if (weapon != null && weapon.gameObject.activeInHierarchy) weapon.OnUpdate();
+            if (weapon != null && weapon.isActiveAndEnabled) weapon.OnUpdate();
     }
 
     public void ToggleCombatMode(bool isCombat)

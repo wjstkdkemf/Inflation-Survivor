@@ -13,6 +13,7 @@ public class ResourceManager : MonoBehaviour
     private Dictionary<string, AsyncOperationHandle<GameObject>> loadedAssets = new Dictionary<string, AsyncOperationHandle<GameObject>>();
     private readonly Dictionary<string, PendingLoad> pendingLoads = new();
     private bool isShuttingDown;
+    private bool isCancellingLoads;
 
     private void Awake()
     {
@@ -55,6 +56,36 @@ public class ResourceManager : MonoBehaviour
         if (Instance == this)
             Instance = null;
     }
+    private void OnDisable()
+    {
+        if (isCancellingLoads)
+            return;
+
+        isCancellingLoads = true;
+        try
+        {
+            StopAllCoroutines();
+
+            var pending = new List<PendingLoad>(pendingLoads.Values);
+            pendingLoads.Clear();
+
+            foreach (var request in pending)
+            {
+                var handle = request.Handle;
+                request.Handle = default;
+
+                if (handle.IsValid())
+                    Addressables.Release(handle);
+            }
+
+            foreach (var request in pending)
+                request.Complete(null);
+        }
+        finally
+        {
+            isCancellingLoads = false;
+        }
+    }
 
     // 외부에서 에셋 로딩을 부탁할 때 쓰는 함수
     // 콜백(Action)을 사용하여 로딩이 완료되면 알려줍니다.
@@ -85,7 +116,7 @@ public class ResourceManager : MonoBehaviour
         var request = new PendingLoad();
         request.Callbacks.Add(onLoaded);
 
-        if (isShuttingDown || string.IsNullOrEmpty(key) || !gameObject.activeInHierarchy)
+        if (isShuttingDown || isCancellingLoads || string.IsNullOrEmpty(key) || !gameObject.activeInHierarchy)
         {
             request.Complete(null);
             return;

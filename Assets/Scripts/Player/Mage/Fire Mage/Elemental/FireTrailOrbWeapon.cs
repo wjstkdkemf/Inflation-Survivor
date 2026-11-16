@@ -9,21 +9,26 @@ public class FireTrailOrbWeapon : OrbWeapon
     private float trailDuration;
     private float trailDamageScaling;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
-        base.Initialize(data); 
-
-        if (data is FireTrailOrbDataSO fireData)
+        if (!(data is FireTrailOrbDataSO fireData))
         {
-            trailPrefab = fireData.trailPrefab;
-            spawnInterval = fireData.spawnInterval;
-            trailDuration = fireData.trailDuration;
-            trailDamageScaling = fireData.trailDamageScaling;
-
-            this.WeaponID = fireData.WeaponId;
+            Debug.LogError("FireTrailOrbDataSO is required.", this);
+            return false;
         }
-        
-        UpdateTrailInfoForExistingOrbs();
+        if (fireData.orbProjectilePrefab == null ||
+            !fireData.orbProjectilePrefab.TryGetComponent<FireTrailOrb>(out _))
+        {
+            Debug.LogError("Fire trail orb requires a FireTrailOrb prefab.", this);
+            return false;
+        }
+
+        // Orb initialization calls the virtual SetupSpawnedOrb method.
+        trailPrefab = fireData.trailPrefab;
+        spawnInterval = fireData.spawnInterval;
+        trailDuration = fireData.trailDuration;
+        trailDamageScaling = fireData.trailDamageScaling;
+        return base.InitializeWeapon(data);
     }
 
     protected override void SetupSpawnedOrb(GameObject orb)

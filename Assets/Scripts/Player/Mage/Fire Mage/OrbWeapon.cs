@@ -24,10 +24,16 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
     }
     // 초기화: 플레이어가 무기를 획득했을 때 딱 1번 실행됨
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is OrbWeaponDataSO orbData)
         {
+            if (orbData.orbProjectilePrefab == null ||
+                !orbData.orbProjectilePrefab.TryGetComponent<Orb>(out _))
+            {
+                Debug.LogError("Orb weapon requires an Orb prefab.", this);
+                return false;
+            }
             currentOrbCount = orbData.orbCount;
             currentRadius = orbData.radius;
             currentRotationSpeed = orbData.rotationSpeed;
@@ -44,9 +50,10 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
         else
         {
             Debug.LogError("잘못된 데이터가 들어왔습니다! OrbWeaponDataSO가 필요합니다.");
-            return;
+            return false;
         }
         SpawnOrbs();
+        return true;
     }
 
     // 플레이어 컨트롤러가 매 프레임 호출해줌

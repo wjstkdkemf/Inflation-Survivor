@@ -14,10 +14,16 @@ public class ChainLightningWeapon : WeaponBase
     private GameObject projectilePrefab;
     private float cooldownTimer;
 
-    public override void Initialize(WeaponDataSO data)
+    protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is ChainLightningDataSO lightningData)
         {
+            if (lightningData.projectilePrefab == null ||
+                !lightningData.projectilePrefab.TryGetComponent<ChainLightningProjectile>(out _))
+            {
+                Debug.LogError("Chain lightning requires a ChainLightningProjectile prefab.", this);
+                return false;
+            }
             currentCooldownTime = lightningData.baseCooldown;
             currentInitialRange = lightningData.initialRange;
             currentProjectileSpeed = lightningData.projectileSpeed;
@@ -36,9 +42,11 @@ public class ChainLightningWeapon : WeaponBase
         else
         {
             Debug.LogError("잘못된 데이터! ChainLightningDataSO가 필요합니다.");
+            return false;
         }
 
         cooldownTimer = 0f; 
+        return true;
     }
 
     public override void OnUpdate()
