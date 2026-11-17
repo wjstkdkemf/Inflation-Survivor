@@ -6,10 +6,18 @@ public class PlayerWeaponController : MonoBehaviour
     public List<WeaponBase> activeWeapons = new List<WeaponBase>();
     public List<WeaponBase> WeaponsFromEquipment = new List<WeaponBase>();
     [SerializeField] private Transform weaponHolder;
+    private Transform weaponCreationRoot;
     public PlayerSkillHUD playerHUD;
 
     private sealed class WeaponState
     {
+        public int LearnedLevel;
+        public int EquipmentLevel;
+        public WeaponBase Weapon;
+    }
+    private sealed class PreparedWeaponChange
+    {
+        public WeaponDataSO Data;
         public int LearnedLevel;
         public int EquipmentLevel;
         public WeaponBase Weapon;
@@ -19,63 +27,220 @@ public class PlayerWeaponController : MonoBehaviour
     private readonly Dictionary<WeaponDataSO, int> requestedEquipmentLevels = new Dictionary<WeaponDataSO, int>();
     private readonly List<WeaponDataSO> stateKeys = new List<WeaponDataSO>();
     private bool combatEnabled = true;
-
-    public void AddWeapon(WeaponDataSO data)
+    private Transform GetWeaponCreationRoot()
     {
-        if (data == null) return;
-        CheckFusion(data);
-        WeaponState state = GetOrCreateState(data);
-        state.LearnedLevel++;
-        SyncWeapon(data, state);
-        RefreshHUD();
+        if (weaponCreationRoot == null)
+        {
+            var root = new GameObject("WeaponCreationRoot");
+            root.SetActive(false);
+            root.transform.SetParent(weaponHolder, false);
+            weaponCreationRoot = root.transform;
+        }
+
+        return weaponCreationRoot;
     }
-
-    public void AddWeaponFromEquipment(WeaponDataSO data)
+    public bool AddWeapon(WeaponDataSO data)
     {
-        if (data == null) return;
-        // Borrowed equipment skills must not consume learned fusion ingredients.
-        WeaponState state = GetOrCreateState(data);
-        state.EquipmentLevel++;
-        SyncWeapon(data, state);
-        RefreshHUD();
-    }
-
-    public void RemoveWeaponFromEquipment(WeaponDataSO data)
-    {
-        if (data == null || !weaponStates.TryGetValue(data, out WeaponState state) || state.EquipmentLevel == 0)
-            return;
-
-        state.EquipmentLevel--;
-        SyncWeapon(data, state);
-        RefreshHUD();
-    }
-
-    public void RemoveWeapon(WeaponDataSO data)
-    {
-        if (data == null || !weaponStates.TryGetValue(data, out WeaponState state)) return;
-        state.LearnedLevel = 0;
-        SyncWeapon(data, state);
-        RefreshHUD();
-    }
-
-    public void CheckFusion(WeaponDataSO data)
-    {
-        if (data == null || data.fusionWeaponData == null) return;
-        foreach (WeaponDataSO ingredient in data.fusionWeaponData)
-            RemoveWeapon(ingredient);
-    }
-
-    public bool CheckLevelUp(WeaponDataSO data)
-    {
-        if (data == null || !weaponStates.TryGetValue(data, out WeaponState state) || state.LearnedLevel == 0)
+        if (data == null)
             return false;
 
+        bool shouldFuse = GetLearnedLevel(data) == 0 && data.fusionWeaponData != null && data.fusionWeaponData.Count > 0;
+
+        if (shouldFuse)
+        {
+            if (!TryPrepareFusion(data, out var changes))
+                return false;
+
+            CommitPreparedWeaponChanges(changes);
+            RefreshHUD();
+            return true;
+        }
+
+        WeaponState state = GetOrCreateState(data);
+        int previousLevel = state.LearnedLevel;
         state.LearnedLevel++;
-        SyncWeapon(data, state);
+
+        if (!SyncWeapon(data, state))
+        {
+            state.LearnedLevel = previousLevel;
+
+            if (state.LearnedLevel == 0 &&
+                state.EquipmentLevel == 0 &&
+                state.Weapon == null)
+            {
+                weaponStates.Remove(data);
+            }
+
+            return false;
+        }
+
         RefreshHUD();
         return true;
     }
+    private bool TryCreateWeapon(WeaponDataSO data, int level, out WeaponBase weapon)
+    {
+        weapon = null;
+        if (data == null || level < 1 || weaponHolder == null ||
+            data.weaponPrefab == null ||
+            data.weaponPrefab.GetComponent<WeaponBase>() == null)
+        {
+            Debug.LogError("Weapon creation references are invalid.", this);
+            return false;
+        }
 
+        GameObject instance = null;
+        try
+        {
+            instance = Instantiate(
+                data.weaponPrefab, GetWeaponCreationRoot(), false);
+            instance.SetActive(false);
+            instance.transform.SetParent(weaponHolder, false);
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+
+            var createdWeapon = instance.GetComponent<WeaponBase>();
+            if (!createdWeapon.enabled ||
+                !createdWeapon.TryInitialize(data) ||
+                !createdWeapon.SetLevel(level))
+            {
+                Destroy(instance);
+                return false;
+            }
+
+            weapon = createdWeapon;
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            if (instance != null)
+            {
+                instance.SetActive(false);
+                Destroy(instance);
+            }
+            Debug.LogException(exception, this);
+            return false;
+        }
+    }
+    private void CommitPreparedWeaponChanges(List<PreparedWeaponChange> changes)
+    {
+        foreach (PreparedWeaponChange change in changes)
+        {
+            if (!weaponStates.TryGetValue(change.Data, out var state))
+                continue;
+
+            WeaponBase oldWeapon = state.Weapon;
+            activeWeapons.Remove(oldWeapon);
+            WeaponsFromEquipment.Remove(oldWeapon);
+
+            if (oldWeapon != null)
+            {
+                oldWeapon.gameObject.SetActive(false);
+                Destroy(oldWeapon.gameObject);
+            }
+        }
+
+        foreach (PreparedWeaponChange change in changes)
+        {
+            if (change.LearnedLevel == 0 && change.EquipmentLevel == 0)
+            {
+                weaponStates.Remove(change.Data);
+                continue;
+            }
+
+            WeaponState state = GetOrCreateState(change.Data);
+            state.LearnedLevel = change.LearnedLevel;
+            state.EquipmentLevel = change.EquipmentLevel;
+            state.Weapon = change.Weapon;
+
+            List<WeaponBase> target = state.LearnedLevel > 0
+                ? activeWeapons : WeaponsFromEquipment;
+            target.Add(state.Weapon);
+        }
+
+        foreach (PreparedWeaponChange change in changes)
+        {
+            if (change.Weapon != null)
+                change.Weapon.gameObject.SetActive(combatEnabled);
+        }
+
+        changes.Clear();
+    }
+    private bool TryPrepareFusion(WeaponDataSO data, out List<PreparedWeaponChange> changes)
+    {
+        changes = new List<PreparedWeaponChange>();
+
+        if (data == null || data.fusionWeaponData == null ||
+            data.fusionWeaponData.Count == 0)
+            return false;
+
+        var seen = new HashSet<WeaponDataSO> { data };
+        foreach (WeaponDataSO ingredient in data.fusionWeaponData)
+        {
+            if (ingredient == null || !seen.Add(ingredient))
+            {
+                Debug.LogError(
+                    $"Invalid fusion ingredients: {data.name}", this);
+                return false;
+            }
+        }
+
+        bool prepared = false;
+        try
+        {
+            if (!TryPrepareWeaponChange(data, GetLearnedLevel(data) + 1, GetEquipmentLevel(data), changes))
+                return false;
+
+            foreach (WeaponDataSO ingredient in data.fusionWeaponData)
+            {
+                if (!weaponStates.TryGetValue(ingredient, out var state) ||
+                    state.LearnedLevel == 0)
+                    continue;
+
+                if (!TryPrepareWeaponChange(ingredient, 0, state.EquipmentLevel, changes))
+                    return false;
+            }
+
+            prepared = true;
+            return true;
+        }
+        finally
+        {
+            if (!prepared)
+                DiscardPreparedWeapons(changes);
+        }
+    }
+    private bool TryPrepareWeaponChange(WeaponDataSO data, int learnedLevel, int equipmentLevel, List<PreparedWeaponChange> changes)
+    {
+        if (data == null || learnedLevel < 0 || equipmentLevel < 0)
+            return false;
+
+        int totalLevel = learnedLevel + equipmentLevel;
+        WeaponBase preparedWeapon = null;
+
+        if (totalLevel > 0 && !TryCreateWeapon(data, totalLevel, out preparedWeapon))
+            return false;
+
+        changes.Add(new PreparedWeaponChange
+        {
+            Data = data,
+            LearnedLevel = learnedLevel,
+            EquipmentLevel = equipmentLevel,
+            Weapon = preparedWeapon
+        });
+        return true;
+    }
+    private void DiscardPreparedWeapons(List<PreparedWeaponChange> changes)
+    {
+        foreach (PreparedWeaponChange change in changes)
+        {
+            if (change.Weapon == null)
+                continue;
+
+            change.Weapon.gameObject.SetActive(false);
+            Destroy(change.Weapon.gameObject);
+        }
+        changes.Clear();
+    }
     private void LateUpdate()
     {
         var gameManager = GameManager.Instance;
@@ -97,11 +262,6 @@ public class PlayerWeaponController : MonoBehaviour
             if (weapon != null) weapon.gameObject.SetActive(isCombat);
     }
 
-    public void ClearEquipmentSkills()
-    {
-        SetEquipmentSkills(null);
-    }
-
     public int GetLearnedLevel(WeaponDataSO data)
     {
         return data != null && weaponStates.TryGetValue(data, out WeaponState state) ? state.LearnedLevel : 0;
@@ -112,7 +272,7 @@ public class PlayerWeaponController : MonoBehaviour
         return data != null && weaponStates.TryGetValue(data, out WeaponState state) ? state.EquipmentLevel : 0;
     }
 
-    public void SetEquipmentSkills(IReadOnlyList<WeaponDataSO> skills)
+    public bool SetEquipmentSkills(IReadOnlyList<WeaponDataSO> skills)
     {
         requestedEquipmentLevels.Clear();
         if (skills != null)
@@ -131,16 +291,43 @@ public class PlayerWeaponController : MonoBehaviour
         stateKeys.Clear();
         stateKeys.AddRange(weaponStates.Keys);
         bool changed = false;
+        bool allSucceeded = true;
+
         foreach (WeaponDataSO data in stateKeys)
         {
             WeaponState state = weaponStates[data];
             requestedEquipmentLevels.TryGetValue(data, out int level);
-            if (state.EquipmentLevel == level && state.Weapon != null) continue;
+
+            if (state.EquipmentLevel == level && state.Weapon != null)
+                continue;
+
+            int previousLevel = state.EquipmentLevel;
             state.EquipmentLevel = level;
-            SyncWeapon(data, state);
+
+            if (!SyncWeapon(data, state))
+            {
+                state.EquipmentLevel = previousLevel;
+                allSucceeded = false;
+
+                if (state.LearnedLevel == 0 &&
+                    state.EquipmentLevel == 0 &&
+                    state.Weapon == null)
+                {
+                    weaponStates.Remove(data);
+                }
+
+                Debug.LogWarning(
+                    $"Equipment skill could not be applied: {data.name}", this);
+                continue;
+            }
+
             changed = true;
         }
-        if (changed) RefreshHUD();
+
+        if (changed)
+            RefreshHUD();
+
+        return allSucceeded;
     }
 
     private WeaponState GetOrCreateState(WeaponDataSO data)
@@ -153,7 +340,7 @@ public class PlayerWeaponController : MonoBehaviour
         return state;
     }
 
-    private void SyncWeapon(WeaponDataSO data, WeaponState state)
+    private bool SyncWeapon(WeaponDataSO data, WeaponState state)
     {
         int totalLevel = state.LearnedLevel + state.EquipmentLevel;
         WeaponBase weapon = state.Weapon;
@@ -167,32 +354,34 @@ public class PlayerWeaponController : MonoBehaviour
                 Destroy(weapon.gameObject);
             }
             weaponStates.Remove(data);
-            return;
+            return true;
         }
 
-        if (weapon == null)
+        bool isNewWeapon = weapon == null;
+
+        if (isNewWeapon)
         {
-            if (data.weaponPrefab == null || data.weaponPrefab.GetComponent<WeaponBase>() == null)
-            {
-                Debug.LogError($"[PlayerWeaponController] Missing weapon prefab/component: {data.name}");
-                return;
-            }
-            GameObject instance = Instantiate(data.weaponPrefab, weaponHolder);
-            instance.transform.localPosition = Vector3.zero;
-            instance.transform.localRotation = Quaternion.identity;
-            weapon = instance.GetComponent<WeaponBase>();
-            state.Weapon = weapon;
-            weapon.myData = data;
-            weapon.CurrentLevel = 1;
-            weapon.Initialize(data);
-            instance.SetActive(combatEnabled);
+            if (!TryCreateWeapon(data, totalLevel, out weapon))
+                return false;
+
+            state.Weapon = weapon;        
+        }
+        else
+        {
+            if (!weapon.SetLevel(totalLevel))
+                return false;
         }
 
-        weapon.SetLevel(totalLevel);
         List<WeaponBase> target = state.LearnedLevel > 0 ? activeWeapons : WeaponsFromEquipment;
         List<WeaponBase> other = state.LearnedLevel > 0 ? WeaponsFromEquipment : activeWeapons;
         other.Remove(weapon);
-        if (!target.Contains(weapon)) target.Add(weapon);
+        if (!target.Contains(weapon))
+            target.Add(weapon);
+
+        if (isNewWeapon)
+            weapon.gameObject.SetActive(combatEnabled);
+
+        return true;
     }
 
     private void RefreshHUD()

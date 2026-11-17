@@ -12,14 +12,42 @@ public class AuraWeapon : WeaponBase
     private GameObject auraInstance;
     private AuraZone auraScript;
 
-    void Start()
+    private PlayerStatsCalculate attackEventSource;
+
+    protected virtual void OnEnable()
     {
-        PlayerStatsCalculate.Instance.AttackChanged += RefreshDamage;
+        if (!IsInitialized)
+            return;
+
+        UnsubscribeAttackChanged();
+
+        attackEventSource = PlayerStatsCalculate.Instance;
+        if (attackEventSource == null)
+        {
+            Debug.LogError("PlayerStatsCalculate is missing.", this);
+            return;
+        }
+
+        attackEventSource.AttackChanged += RefreshDamage;
         RefreshDamage();
     }
-    void OnDestroy()
+
+    protected virtual void OnDisable()
     {
-        PlayerStatsCalculate.Instance.AttackChanged -= RefreshDamage;
+        UnsubscribeAttackChanged();
+    }
+
+    protected virtual void OnDestroy()
+    {
+        UnsubscribeAttackChanged();
+    }
+
+    private void UnsubscribeAttackChanged()
+    {
+        if (attackEventSource != null)
+            attackEventSource.AttackChanged -= RefreshDamage;
+
+        attackEventSource = null;
     }
 
     protected override bool InitializeWeapon(WeaponDataSO data)
@@ -82,9 +110,9 @@ public class AuraWeapon : WeaponBase
     }
 
     // 레벨업 시 범위와 데미지 증가
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is AuraDataSO data)) return;
+        if (!(myData is AuraDataSO data)) return false;
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         currentRadius = CalculateLevelStat(SkillStatType.Radius, data.baseRadius, CurrentLevel);
 
@@ -93,6 +121,7 @@ public class AuraWeapon : WeaponBase
             auraScript.SetupAura(currentTickRate, GetDamage(), currentRadius, applySlow, slowPercentage , WeaponID);
         }
         UpdateAuraSize();
+        return true;
     }
     protected override void RefreshDamage()
     {

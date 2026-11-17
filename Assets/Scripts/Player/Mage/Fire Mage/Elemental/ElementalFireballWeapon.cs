@@ -140,11 +140,12 @@ public class ElementalFireballWeapon : WeaponBase
         return CalculateDamage(currentDamage, 2d);
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is ElementalFireballSO data)) return;
+        if (!(myData is ElementalFireballSO data)) return false;
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         trailDamageScaling = CalculateLevelStat(SkillStatType.TrailDamageScaling, data.trailDamageScaling, CurrentLevel);
         DevLog.Log($"[Evo Fireball Level Up] 직격뎀: {currentDamage}, 장판계수: {trailDamageScaling}");
+        return true;
     }
 }

@@ -136,14 +136,15 @@ public class SpreadingFlameWeapon : WeaponBase
         return CalculateDamage(currentDamage);
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is SpreadingFlameDataSO data)) return;
+        if (!(myData is SpreadingFlameDataSO data)) return false;
         flameCount = CalculateCount(SkillStatType.ProjectileCount, Mathf.Max(1, data.flameCount), CurrentLevel);
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         spreadRadius = CalculateLevelStat(SkillStatType.Radius, data.spreadRadius, CurrentLevel);
 
         SetupRangeIndicator();
+        return true;
     }
 
     public override UpgradePreviewData GetUpgradePreview(UpgradeScriptableObject upgrade)
@@ -174,7 +175,7 @@ public class SpreadingFlameWeapon : WeaponBase
     private void SetupRangeIndicator()
     {
         if (rangeIndicator == null)
-            rangeIndicator = GetComponentInChildren<RangeCircleIndicator>();
+            rangeIndicator = GetComponentInChildren<RangeCircleIndicator>(true);
 
         if (rangeIndicator != null)
             rangeIndicator.SetRadius(searchRadius);

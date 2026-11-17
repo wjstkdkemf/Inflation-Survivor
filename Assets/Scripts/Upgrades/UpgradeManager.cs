@@ -190,31 +190,34 @@ public class UpgradeManager : MonoBehaviour
 
     public void OnUpgradeSelected(UpgradeScriptableObject chosenUpgrade)
     {
-        chosenUpgrade.Points++;
+        if (chosenUpgrade == null)
+            return;
 
-        // 무기인가? 패시브 스탯인가?
         if (chosenUpgrade.IsWeaponUpgrade)
         {
-            // 무기라면
-            if (playerWeaponController != null)
+            if (playerWeaponController == null ||
+                !playerWeaponController.AddWeapon(chosenUpgrade.linkedWeaponData))
             {
-                playerWeaponController.AddWeapon(chosenUpgrade.linkedWeaponData);
-                //Debug.Log($"[Upgrade] 무기 적용: {chosenUpgrade.linkedWeaponData.weaponName}");
+                Debug.LogWarning(
+                    $"Upgrade could not be applied: {chosenUpgrade.name}", this);
+                return;
             }
         }
         else
         {
-            // 스탯이라면 
+            if (PlayerStatsCalculate.Instance == null)
+                return;
+
             ApplyStatBonus(chosenUpgrade);
-            Debug.Log($"[Upgrade] 스탯 적용: {chosenUpgrade.upgradeType}");
         }
 
-        // 잡 클래스 조건 달성 확인
-        while(CheckAndSetJobClass())
+        chosenUpgrade.Points++;
+        ClearCardFocus();
+
+        while (CheckAndSetJobClass())
         {
         }
 
-        // 창 닫기
         ProcessNextUpgrade();
     }
     public void HandleCardClick(UpgradeUi card)
@@ -229,7 +232,6 @@ public class UpgradeManager : MonoBehaviour
         if (focusedCard == card)
         {
             var upgrade = card.Upgrade;
-            ClearCardFocus();
             OnUpgradeSelected(upgrade);
             return;
         }

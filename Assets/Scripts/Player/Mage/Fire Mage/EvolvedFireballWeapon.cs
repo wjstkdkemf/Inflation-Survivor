@@ -132,10 +132,11 @@ public class EvolvedFireballWeapon : WeaponBase
         return CalculateDamage(currentDamage);
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is EvolvedFireballDataSO data)) return;
+        if (!(myData is EvolvedFireballDataSO data)) return false;
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         trailDamageScaling = CalculateLevelStat(SkillStatType.TrailDamageScaling, data.trailDamageScaling, CurrentLevel);
+        return true;
     }
 }

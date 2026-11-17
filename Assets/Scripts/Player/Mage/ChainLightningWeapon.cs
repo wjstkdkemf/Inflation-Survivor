@@ -98,12 +98,13 @@ public class ChainLightningWeapon : WeaponBase
         return CalculateDamage(currentDamage, currentScaling);
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is ChainLightningDataSO data)) return;
+        if (!(myData is ChainLightningDataSO data)) return false;
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         currentChainCount = CalculateChainCount(data, CurrentLevel);
         DevLog.Log($"[Chain Lightning Level Up] 데미지: {currentDamage}, 체인 횟수: {currentChainCount}");
+        return true;
     }
 
     private int CalculateChainCount(ChainLightningDataSO data, int level)

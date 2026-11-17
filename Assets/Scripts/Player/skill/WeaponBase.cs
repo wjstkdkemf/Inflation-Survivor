@@ -64,17 +64,33 @@ public abstract class WeaponBase : MonoBehaviour
         RecalculateLevelStats();
     }
 
-    public void SetLevel(int level)
+    public bool SetLevel(int level)
     {
-        level = Mathf.Max(1, level);
-        if (CurrentLevel == level) return;
+        if (!IsInitialized)
+            return false;
 
+        level = Mathf.Max(1, level);
+        if (CurrentLevel == level)
+            return true;
+
+        int previousLevel = CurrentLevel;
+        bool succeeded = false;
         CurrentLevel = level;
-        RecalculateLevelStats();
+
+        try
+        {
+            succeeded = RecalculateLevelStats();
+            return succeeded;
+        }
+        finally
+        {
+            if (!succeeded)
+                CurrentLevel = previousLevel;
+        }
     }
 
     // Recompute stats only; do not restart cooldowns, volleys, or Initialize().
-    protected abstract void RecalculateLevelStats();
+    protected abstract bool RecalculateLevelStats();
 
     protected float GetCooldown(float baseCooldown)
     {
@@ -178,9 +194,7 @@ public abstract class WeaponBase : MonoBehaviour
         }
     }
 
-    protected int CalculateCount(SkillStatType stat,
-                                int baseCount,
-                                int level)
+    protected int CalculateCount(SkillStatType stat,int baseCount,int level)
     {
         return CalculateCount(myData, stat, baseCount, level);
     }

@@ -170,12 +170,13 @@ public class BarrierWeapon : WeaponBase
         }
     }
     
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is BarrierDataSO data)) return;
+        if (!(myData is BarrierDataSO data)) return false;
         float chargeTime = CalculateLevelStat(SkillStatType.ChargeTime, data.chargeTime, CurrentLevel);
         currentChargeTimeLimit = CurrentLevel <= 1 ? chargeTime : Mathf.Max(1f, chargeTime);
         currentKnockbackForce = CalculateLevelStat(SkillStatType.KnockbackForce, data.knockbackForce, CurrentLevel);
         DevLog.Log($"[Barrier Level Up] 대기시간: {currentChargeTimeLimit}, 넉백파워: {currentKnockbackForce}");
+        return true;
     }
 }

@@ -1451,7 +1451,13 @@ namespace InventorySystem
                 }
             }
             UpgradeManager.Instance.playerWeaponController.SetEquipmentSkills(equipmentSkills);
-            Debug.Log("장비 스킬 적용");
+            bool allSucceeded = UpgradeManager.Instance.playerWeaponController.SetEquipmentSkills(equipmentSkills);
+
+            if (!allSucceeded)
+            {
+                Debug.LogWarning(
+                    "Some equipment skills could not be applied.", this);
+            }
         }
         public void CopyEquippedItemsToInventory(string equipmentInvName, string mainInvName)
         {

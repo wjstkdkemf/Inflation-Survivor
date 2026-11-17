@@ -13,17 +13,43 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
     protected List<GameObject> spawnedOrbs = new List<GameObject>();
     private float angleStep;
 
-    void Start()
+    private PlayerStatsCalculate attackEventSource;
+
+    protected virtual void OnEnable()
     {
-        PlayerStatsCalculate.Instance.AttackChanged += RefreshDamage;
+        if (!IsInitialized)
+            return;
+
+        UnsubscribeAttackChanged();
+
+        attackEventSource = PlayerStatsCalculate.Instance;
+        if (attackEventSource == null)
+        {
+            Debug.LogError("PlayerStatsCalculate is missing.", this);
+            return;
+        }
+
+        attackEventSource.AttackChanged += RefreshDamage;
         RefreshDamage();
     }
-    void OnDestroy()
-    {
-        PlayerStatsCalculate.Instance.AttackChanged -= RefreshDamage;
-    }
-    // 초기화: 플레이어가 무기를 획득했을 때 딱 1번 실행됨
 
+    protected virtual void OnDisable()
+    {
+        UnsubscribeAttackChanged();
+    }
+
+    protected virtual void OnDestroy()
+    {
+        UnsubscribeAttackChanged();
+    }
+
+    private void UnsubscribeAttackChanged()
+    {
+        if (attackEventSource != null)
+            attackEventSource.AttackChanged -= RefreshDamage;
+
+        attackEventSource = null;
+    }
     protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is OrbWeaponDataSO orbData)
@@ -34,7 +60,6 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
                 Debug.LogError("Orb weapon requires an Orb prefab.", this);
                 return false;
             }
-            currentOrbCount = orbData.orbCount;
             currentRadius = orbData.radius;
             currentRotationSpeed = orbData.rotationSpeed;
             currentDamage = orbData.baseDamage; // 부모 SO에 있는 데미지
@@ -52,7 +77,59 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
             Debug.LogError("잘못된 데이터가 들어왔습니다! OrbWeaponDataSO가 필요합니다.");
             return false;
         }
-        SpawnOrbs();
+
+        return TryReplaceOrbs(orbData.orbCount);
+    }
+    private bool TryReplaceOrbs(int targetCount)
+    {
+        if (targetCount < 0 || orbPrefab == null ||
+            !orbPrefab.TryGetComponent<Orb>(out _))
+            return false;
+
+        var pendingOrbs = new List<GameObject>(targetCount);
+        float nextAngleStep = targetCount > 0 ? 360f / targetCount : 0f;
+        var stagingRoot = new GameObject("OrbStaging");
+        stagingRoot.SetActive(false);
+        stagingRoot.transform.SetParent(transform, false);
+
+        try
+        {
+            for (int i = 0; i < targetCount; i++)
+            {
+                float angle = i * nextAngleStep + Time.time * currentRotationSpeed;
+                GameObject orb = Instantiate(orbPrefab, GetOrbPosition(angle),Quaternion.identity, stagingRoot.transform);
+
+                orb.SetActive(false);
+                SetupSpawnedOrb(orb);
+                pendingOrbs.Add(orb);
+            }
+        }
+        catch (System.Exception exception)
+        {
+            Destroy(stagingRoot);
+            Debug.LogException(exception, this);
+            return false;
+        }
+
+        foreach (GameObject orb in spawnedOrbs)
+        {
+            if (orb != null)
+                orb.SetActive(false);
+        }
+        ClearOrbs();
+
+        spawnedOrbs = pendingOrbs;
+        currentOrbCount = targetCount;
+        angleStep = nextAngleStep;
+
+        foreach (GameObject orb in spawnedOrbs)
+            orb.transform.SetParent(transform, true);
+
+        Destroy(stagingRoot);
+
+        foreach (GameObject orb in spawnedOrbs)
+            orb.SetActive(true);
+
         return true;
     }
 
@@ -60,26 +137,6 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
     public override void OnUpdate()
     {
         OrbitOrbs();
-    }
-
-    void SpawnOrbs()
-    {
-        ClearOrbs();
-
-        if (currentOrbCount == 0) return;
-
-        angleStep = 360f / currentOrbCount;
-
-        for (int i = 0; i < currentOrbCount; i++)
-        {
-            GameObject orb = Instantiate(orbPrefab, transform.position, Quaternion.identity, transform);
-            
-            float angle = i * angleStep;
-            orb.transform.position = GetOrbPosition(angle);
-            
-            SetupSpawnedOrb(orb);
-            spawnedOrbs.Add(orb);
-        }
     }
     Vector3 GetOrbPosition(float angle)
     {
@@ -127,11 +184,12 @@ public class OrbWeapon : WeaponBase // 부모 클래스 변경
     {
         currentRotationSpeed += amount;
     }
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is OrbWeaponDataSO data)) return;
-        currentOrbCount = CalculateCount(SkillStatType.ProjectileCount, data.orbCount, CurrentLevel);
-        SpawnOrbs();
+        if (!(myData is OrbWeaponDataSO data)) return false;
+        int targetCount = CalculateCount(SkillStatType.ProjectileCount, data.orbCount, CurrentLevel);
+
+        return TryReplaceOrbs(targetCount);
     }
 
     public override UpgradePreviewData GetUpgradePreview(UpgradeScriptableObject upgrade)

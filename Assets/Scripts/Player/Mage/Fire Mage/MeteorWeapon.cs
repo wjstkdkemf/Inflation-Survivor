@@ -180,11 +180,12 @@ public class MeteorWeapon : WeaponBase
         return CalculateDamage(currentDamage, playerDamageScaling);
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is MeteorWeaponSO data)) return;
+        if (!(myData is MeteorWeaponSO data)) return false;
         currentMeteorNumber = CalculateCount(SkillStatType.ProjectileCount, data.MeteorNumber, CurrentLevel);
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
+        return true;
     }
 
     public override UpgradePreviewData GetUpgradePreview(UpgradeScriptableObject upgrade)

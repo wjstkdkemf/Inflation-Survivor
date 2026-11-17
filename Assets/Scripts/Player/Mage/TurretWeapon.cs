@@ -164,13 +164,14 @@ public class TurretWeapon : WeaponBase
         closestEnemyPosition = closestEnemy != null ? closestEnemy.transform : null;
     }
 
-    protected override void RecalculateLevelStats()
+    protected override bool RecalculateLevelStats()
     {
-        if (!(myData is TurretWeaponDataSO data)) return;
+        if (!(myData is TurretWeaponDataSO data)) return false;
         currentBulletNumber = CalculateCount(SkillStatType.ProjectileCount, data.bulletNumber, CurrentLevel);
         currentDamage = CalculateLevelDamage(data.baseDamage, CurrentLevel);
         
         DevLog.Log($"[Turret Level Up] 총알: {currentBulletNumber}, 데미지: {currentDamage}");
+        return true;
     }
 
     public override UpgradePreviewData GetUpgradePreview(UpgradeScriptableObject upgrade)
