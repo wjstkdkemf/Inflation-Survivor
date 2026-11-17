@@ -44,7 +44,6 @@ public class TurretWeapon : WeaponBase
             currentRange = turretData.range;
             currentScaling = turretData.playerDamageScaling;
             currentDamage = turretData.baseDamage;
-            this.WeaponID = turretData.WeaponId;
 
             attackMotion = turretData.attackMotion;
             

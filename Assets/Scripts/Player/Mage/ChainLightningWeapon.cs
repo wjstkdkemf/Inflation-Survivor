@@ -35,8 +35,6 @@ public class ChainLightningWeapon : WeaponBase
 
             attackMotion = lightningData.attackMotion;
 
-            this.WeaponID = lightningData.WeaponId;
-
             projectilePrefab = lightningData.projectilePrefab;
         }
         else

@@ -48,7 +48,6 @@ public class MeteorWeapon : WeaponBase
 
             attackMotion = MeteorData.attackMotion;
 
-            this.WeaponID = data.WeaponId;
             
             cooldownTimer = 0f; 
             return true;

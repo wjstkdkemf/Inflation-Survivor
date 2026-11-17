@@ -1,10 +1,14 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public abstract class WeaponBase : MonoBehaviour
 {
-    public WeaponDataSO myData;
-    public string WeaponID;
-    public int CurrentLevel;
+    [FormerlySerializedAs("myData")]
+    [SerializeField] private WeaponDataSO weaponData;
+
+    public WeaponDataSO myData => weaponData;
+    public string WeaponID { get; private set; }
+    public int CurrentLevel { get; private set; }
     protected long currentDamage;
     protected float currentCooldown;
     protected float currentHitRadius;
@@ -14,13 +18,6 @@ public abstract class WeaponBase : MonoBehaviour
     protected WeaponAnimationController weaponAnimator;
     protected WeaponVisualController weaponVisual;
     public bool IsInitialized { get; private set; }
-
-    public virtual void Initialize(WeaponDataSO data)
-    {
-        // Compatibility entry point until the controller handles failure explicitly.
-        if (!TryInitialize(data))
-            enabled = false;
-    }
     public bool TryInitialize(WeaponDataSO data)
     {
         if (IsInitialized)
@@ -34,7 +31,7 @@ public abstract class WeaponBase : MonoBehaviour
 
         try
         {
-            myData = data;
+            weaponData = data;
             WeaponID = data.WeaponId;
             CurrentLevel = 1;
 
@@ -59,11 +56,6 @@ public abstract class WeaponBase : MonoBehaviour
 
     // 플레이어의 Update에서 매 프레임 호출해줄 함수
     public abstract void OnUpdate();
-    public virtual void LevelUp()
-    {
-        RecalculateLevelStats();
-    }
-
     public bool SetLevel(int level)
     {
         if (!IsInitialized)

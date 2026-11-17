@@ -3,8 +3,11 @@ using UnityEngine;
 
 public class PlayerWeaponController : MonoBehaviour
 {
-    public List<WeaponBase> activeWeapons = new List<WeaponBase>();
-    public List<WeaponBase> WeaponsFromEquipment = new List<WeaponBase>();
+    private readonly List<WeaponBase> activeWeapons = new();
+    private readonly List<WeaponBase> WeaponsFromEquipment = new();
+
+    public IReadOnlyList<WeaponBase> ActiveWeapons => activeWeapons;
+    public IReadOnlyList<WeaponBase> EquipmentWeapons => WeaponsFromEquipment;
     [SerializeField] private Transform weaponHolder;
     private Transform weaponCreationRoot;
     public PlayerSkillHUD playerHUD;
@@ -57,22 +60,9 @@ public class PlayerWeaponController : MonoBehaviour
         }
 
         WeaponState state = GetOrCreateState(data);
-        int previousLevel = state.LearnedLevel;
-        state.LearnedLevel++;
-
-        if (!SyncWeapon(data, state))
-        {
-            state.LearnedLevel = previousLevel;
-
-            if (state.LearnedLevel == 0 &&
-                state.EquipmentLevel == 0 &&
-                state.Weapon == null)
-            {
-                weaponStates.Remove(data);
-            }
-
+        if (!TryApplyWeaponLevels(
+                data, state, state.LearnedLevel + 1, state.EquipmentLevel))
             return false;
-        }
 
         RefreshHUD();
         return true;
@@ -241,6 +231,35 @@ public class PlayerWeaponController : MonoBehaviour
         }
         changes.Clear();
     }
+    private bool TryApplyWeaponLevels(WeaponDataSO data, WeaponState state, int learnedLevel, int equipmentLevel)
+    {
+        int previousLearned = state.LearnedLevel;
+        int previousEquipment = state.EquipmentLevel;
+        bool succeeded = false;
+
+        state.LearnedLevel = learnedLevel;
+        state.EquipmentLevel = equipmentLevel;
+        try
+        {
+            succeeded = SyncWeapon(data, state);
+            return succeeded;
+        }
+        finally
+        {
+            if (!succeeded)
+            {
+                state.LearnedLevel = previousLearned;
+                state.EquipmentLevel = previousEquipment;
+
+                if (state.LearnedLevel == 0 &&
+                    state.EquipmentLevel == 0 &&
+                    state.Weapon == null)
+                {
+                    weaponStates.Remove(data);
+                }
+            }
+        }
+    }
     private void LateUpdate()
     {
         var gameManager = GameManager.Instance;
@@ -301,21 +320,9 @@ public class PlayerWeaponController : MonoBehaviour
             if (state.EquipmentLevel == level && state.Weapon != null)
                 continue;
 
-            int previousLevel = state.EquipmentLevel;
-            state.EquipmentLevel = level;
-
-            if (!SyncWeapon(data, state))
+            if (!TryApplyWeaponLevels(data, state, state.LearnedLevel, level))
             {
-                state.EquipmentLevel = previousLevel;
                 allSucceeded = false;
-
-                if (state.LearnedLevel == 0 &&
-                    state.EquipmentLevel == 0 &&
-                    state.Weapon == null)
-                {
-                    weaponStates.Remove(data);
-                }
-
                 Debug.LogWarning(
                     $"Equipment skill could not be applied: {data.name}", this);
                 continue;

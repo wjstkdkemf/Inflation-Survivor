@@ -24,7 +24,7 @@ public class PlayerSkillHUD : MonoBehaviour
         }
         spawnedIcons.Clear(); // 리스트 비우기
 
-        foreach (WeaponBase weapon in weaponController.activeWeapons)
+        foreach (WeaponBase weapon in weaponController.ActiveWeapons)
         {
             if (weapon == null || weapon.myData == null || weapon.myData.upgradeData == null) 
                 continue;
@@ -41,7 +41,7 @@ public class PlayerSkillHUD : MonoBehaviour
             spawnedIcons.Add(newIconObj);
         }
 
-        foreach (WeaponBase weapon in weaponController.WeaponsFromEquipment)
+        foreach (WeaponBase weapon in weaponController.EquipmentWeapons)
         {
             if (weapon == null || weapon.myData == null || weapon.myData.upgradeData == null) 
                 continue;

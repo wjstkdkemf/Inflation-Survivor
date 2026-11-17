@@ -66,8 +66,6 @@ public class AuraWeapon : WeaponBase
             applySlow = auraData.applySlow;
             slowPercentage = auraData.slowPercentage;
 
-            this.WeaponID = auraData.WeaponId;
-
             if (auraData.auraPrefab != null)
             {
                 auraInstance = Instantiate(auraData.auraPrefab, transform.position, Quaternion.identity, transform);
@@ -125,7 +123,10 @@ public class AuraWeapon : WeaponBase
     }
     protected override void RefreshDamage()
     {
-        RecalculateLevelStats();
+        if (auraScript == null)
+            return;
+
+        auraScript.damage = GetDamage();
     }
 
 
