@@ -1,4 +1,4 @@
-# Milestone Survivor
+# Inflation Survivor
 
 ## 프로젝트 소개
 > Milestone Survivor는 뱀서라이크(Vampire Survivors-like) 장르의 핵심 재미인 대규모 물량전과 무한한 성장을 구현한 로그라이트 액션 게임입니다.
