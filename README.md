@@ -1,7 +1,7 @@
 # Inflation Survivor
 
 ## 프로젝트 소개
-> Milestone Survivor는 뱀서라이크(Vampire Survivors-like) 장르의 핵심 재미인 대규모 물량전과 무한한 성장을 구현한 로그라이트 액션 게임입니다.
+> Inflation Survivor는 뱀서라이크(Vampire Survivors-like) 장르의 핵심 재미인 대규모 물량전과 무한한 성장을 구현한 로그라이트 액션 게임입니다.
 > 1인 개발의 한계를 극복하기 위해 **Gemini API/CLI**를 개발 파이프라인에 적극 도입하여 생산성을 극대화했으며, 오브젝트 풀링과 공간 분할을 통해 최적화된 성능을 구현했습니다.
 
 * **개발 기간:** 2025.06 ~ 진행 중
