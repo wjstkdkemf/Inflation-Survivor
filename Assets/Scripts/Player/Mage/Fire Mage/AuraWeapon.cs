@@ -123,10 +123,7 @@ public class AuraWeapon : WeaponBase
     }
     protected override void RefreshDamage()
     {
-        if (auraScript == null)
-            return;
-
-        auraScript.damage = GetDamage();
+        RecalculateLevelStats();
     }
 
 

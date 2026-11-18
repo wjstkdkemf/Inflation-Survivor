@@ -28,7 +28,13 @@ public class CelestialFireballWeapon : WeaponBase
     private float volleyTimer;
     private int pendingBullets = 0;
     private Enemy currentTarget;
+    private uint currentTargetSpawnVersion;
 
+    private bool HasValidCurrentTarget =>
+        currentTarget != null &&
+        currentTarget.isActiveAndEnabled &&
+        currentTarget.currentNormalState != Enemy.EnemyState.Dead &&
+        currentTarget.SpawnVersion == currentTargetSpawnVersion;
     protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is CelestialFireballSO evoData)
@@ -77,8 +83,7 @@ public class CelestialFireballWeapon : WeaponBase
 
             if (cooldownTimer <= 0f)
             {
-                currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-                if (currentTarget != null)
+                if (TryAcquireTarget())
                 {
                     pendingBullets = bulletNumber;
                     volleyTimer = 0f;
@@ -90,24 +95,21 @@ public class CelestialFireballWeapon : WeaponBase
             volleyTimer -= Time.deltaTime;
             if (volleyTimer <= 0f)
             {
-                FireProjectile(currentTarget);
+                FireProjectile();
             }
         }
     }
 
-    void FireProjectile(Enemy target)
+    void FireProjectile()
     {
-        if (target == null || target.currentNormalState == Enemy.EnemyState.Dead)
-        {
-            currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-            if (currentTarget == null) 
+            if (!HasValidCurrentTarget && !TryAcquireTarget())
             {
                 pendingBullets = 0;
                 cooldownTimer = GetCooldown(fireRate);
                 return;
             }
-            target = currentTarget;
-        }
+
+            Enemy target = currentTarget;
 
         var pool = ObjectPoolingManager.Instance;
         if (pool == null) return;
@@ -124,7 +126,7 @@ public class CelestialFireballWeapon : WeaponBase
         float finalTrailDamage = directDamage * trailDamageScaling;
         float boomDamage = GetFireBoomDamage();
         evoScript.Setup(
-            target.transform, projectileSpeed, trailPrefab, finalTrailDamage, trailDuration, trailSpawnDistance,
+            target, projectileSpeed, trailPrefab, finalTrailDamage, trailDuration, trailSpawnDistance,
             LastFireBoomPrefab, boomDamage, lastFireBoomSize, chains, chainRange , WeaponID
         );
         evoScript.damage = directDamage; // SkillProjectileBase 직격 데미지
@@ -143,6 +145,18 @@ public class CelestialFireballWeapon : WeaponBase
     public long GetFireBoomDamage()
     {
         return CalculateDamage(currentDamage, 2d);
+    }
+    private bool TryAcquireTarget()
+    {
+        var swarm = EnemySwarmSystem.Instance;
+        currentTarget = swarm != null
+            ? swarm.GetClosestEnemy(transform.position, range)
+            : null;
+
+        currentTargetSpawnVersion =
+            currentTarget != null ? currentTarget.SpawnVersion : 0;
+
+        return HasValidCurrentTarget;
     }
     protected override bool RecalculateLevelStats()
     {

@@ -21,9 +21,16 @@ public class Meteor : SkillProjectileBase
     protected override void OnEnable()
     {
     }
+    protected override void OnDisable()
+    {
+        base.OnDisable();
+        ReleaseMagicCircle();
+    }
 
     public void Fire(Vector3 targetPos, float meteorDamage, float expRadius , string WeaponID)
     {
+        ReleaseMagicCircle();
+        
         this.damage = (long)meteorDamage;
         this.impactRadius = expRadius;
         
@@ -52,7 +59,7 @@ public class Meteor : SkillProjectileBase
             timer -= Time.deltaTime;
             if (timer <= 0)
             {
-                if (activeMagicCircle != null) ObjectPoolingManager.Instance.ReturnObjectToPool(activeMagicCircle);
+                ReleaseMagicCircle();
                 state = 1; // 낙하 시작
             }
         }
@@ -98,6 +105,23 @@ public class Meteor : SkillProjectileBase
 
     public override void OnHit(Enemy hitEnemy)
     {
+    }
+    private void ReleaseMagicCircle()
+    {
+        GameObject circle = activeMagicCircle;
+        activeMagicCircle = null;
+
+        if (circle == null) return;
+
+        if (circle.TryGetComponent<PoolMember>(out var member) &&
+            member.Owner != null)
+        {
+            member.Owner.ReturnObjectToPool(circle);
+        }
+        else
+        {
+            Destroy(circle);
+        }
     }
 
     private void OnDrawGizmosSelected()

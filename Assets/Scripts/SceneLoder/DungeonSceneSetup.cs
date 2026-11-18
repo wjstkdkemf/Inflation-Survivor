@@ -33,9 +33,14 @@ public class DungeonSceneSetup : MonoBehaviour, ISceneInitializer
         
         InventorySystem.InventoryController.instance.init();
 
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        GameObject player = GameManager.Instance.Player;
         PlayerHealth playerHealth = player != null ? player.GetComponent<PlayerHealth>() : null;
         if (playerHealth != null) playerHealth.InitializeForNewScene();
+        var projectileManager = EnemyProjectileManager.Instance;
+        if (projectileManager == null || !projectileManager.BindPlayer(player))
+        {
+            Debug.LogError("[DungeonSceneSetup] Failed to bind projectile target.");
+        }
 
         Resources.UnloadUnusedAssets();
 

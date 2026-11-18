@@ -86,18 +86,27 @@ public class ObjectPoolingManager : MonoBehaviour
             return null;
         }
 
-        pool.gameObjects.RemoveAll(go => go == null);
+        GameObject obj = null;
 
-        GameObject obj = pool.gameObjects.FirstOrDefault();
-        PoolMember member = obj != null
-            ? obj.GetComponent<PoolMember>()
-            : CreatePoolMember(ObjectToSpawn, pool);
+        while (pool.gameObjects.Count > 0)
+        {
+            int lastIndex = pool.gameObjects.Count - 1;
+            obj = pool.gameObjects[lastIndex];
+            pool.gameObjects.RemoveAt(lastIndex);
+
+            if (obj != null)
+                break;
+        }
+
+        PoolMember member = obj != null ? obj.GetComponent<PoolMember>() : CreatePoolMember(ObjectToSpawn, pool);
+
         if (member == null || member.Owner != this ||
             member.Pool != pool || !member.TryMarkRented())
+        {
             return null;
+        }
 
         obj = member.gameObject;
-        pool.gameObjects.Remove(obj);
         obj.transform.SetPositionAndRotation(Position, Rotation);
         obj.SetActive(true);
 

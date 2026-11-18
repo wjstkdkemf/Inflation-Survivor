@@ -4,7 +4,15 @@ using UnityEngine;
 
 public class ElementalFireballProjectile : SkillProjectileBase
 {
-    private Transform target;
+    private Enemy target;
+
+    private uint targetSpawnVersion;
+
+    private bool HasValidTarget =>
+        target != null &&
+        target.isActiveAndEnabled &&
+        target.currentNormalState != Enemy.EnemyState.Dead &&
+        target.SpawnVersion == targetSpawnVersion;
     
     // 장판 관련 데이터
     private GameObject trailPrefab;
@@ -21,10 +29,11 @@ public class ElementalFireballProjectile : SkillProjectileBase
     private float speed;
 
     // 무기에서 호출하여 데이터 초기화
-    public void Setup(Transform newTarget, float newSpeed, GameObject trail, float tDamage, float tDuration, float tSpawnDist, 
+    public void Setup(Enemy newTarget, float newSpeed, GameObject trail, float tDamage, float tDuration, float tSpawnDist, 
                       GameObject boomPrefab, float boomDamage, float boomSize , string WeaponID)
     {
         target = newTarget;
+        targetSpawnVersion = target != null ? target.SpawnVersion : 0;
         speed = newSpeed;
         hitRadius = 0.5f;
         maxHits = 1;
@@ -42,15 +51,22 @@ public class ElementalFireballProjectile : SkillProjectileBase
 
         this.WeaponID = WeaponID;
 
-        if (target != null) RotateTowardsTarget(target.position);
+        if (HasValidTarget)
+            RotateTowardsTarget(target.transform.position);
     }
     void Update()
     {
-        Vector3 moveDirection = transform.right; 
-        if (target != null && target.gameObject.activeInHierarchy)
+        Vector3 moveDirection = transform.right;
+
+        if (HasValidTarget)
         {
-            moveDirection = (target.position - transform.position).normalized;
-            RotateTowardsTarget(target.position);
+            Vector3 targetPosition = target.transform.position;
+            moveDirection = (targetPosition - transform.position).normalized;
+            RotateTowardsTarget(targetPosition);
+        }
+        else
+        {
+            target = null;
         }
         transform.position += moveDirection * speed * Time.deltaTime;
 
@@ -64,13 +80,22 @@ public class ElementalFireballProjectile : SkillProjectileBase
     void SpawnTrail()
     {
         if (trailPrefab == null) return;
-        GameObject trail = ObjectPoolingManager.Instance.spawnGameObject(trailPrefab, transform.position, Quaternion.identity);
 
-        // 🚨 장판 프리팹은 반드시 Collider 없이 AuraSkill(혹은 ZoneDamageArea)이 붙어있어야 합니다!
-        if (trail != null && trail.TryGetComponent<AuraZone>(out var trailSkill))
+        var pool = ObjectPoolingManager.Instance;
+        if (pool == null) return;
+
+        GameObject trail = pool.spawnGameObject(
+            trailPrefab, transform.position, Quaternion.identity);
+
+        if (trail == null) return;
+
+        if (!trail.TryGetComponent<AuraZone>(out var trailSkill))
         {
-            trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f, false, 0f, WeaponID ,trailDuration); 
+            pool.ReturnObjectToPool(trail);
+            return;
         }
+
+        trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f,false, 0f, WeaponID, trailDuration);
     }
     public override void OnHit(Enemy hitEnemy)
     {
@@ -93,6 +118,10 @@ public class ElementalFireballProjectile : SkillProjectileBase
             if (Time.time >= EnemySwarmSystem.Instance.nextHitTimes[idx])
             {
                 target.TakeDamage(fireBoomDamage);
+
+                RunStatisticsManager.Instance.RecordWeaponDamage(
+                    WeaponID, (long)fireBoomDamage);
+
                 EnemySwarmSystem.Instance.nextHitTimes[idx] = Time.time + 0.1f;
             }
         }

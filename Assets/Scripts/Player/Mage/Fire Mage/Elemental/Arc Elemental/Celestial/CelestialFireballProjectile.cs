@@ -4,7 +4,14 @@ using UnityEngine;
 
 public class CelestialFireballProjectile : SkillProjectileBase
 {
-    private Transform target;
+    private Enemy target;
+    private uint targetSpawnVersion;
+
+    private bool HasValidTarget =>
+        target != null &&
+        target.isActiveAndEnabled &&
+        target.currentNormalState != Enemy.EnemyState.Dead &&
+        target.SpawnVersion == targetSpawnVersion;
     private float speed;
     
     // 장판 관련 데이터
@@ -19,8 +26,7 @@ public class CelestialFireballProjectile : SkillProjectileBase
     // 체인(튕기기) 관련 데이터
     private int remainingChains;
     private float chainRange;
-    private HashSet<Enemy> visitedTargets = new HashSet<Enemy>();
-
+    private readonly Dictionary<Enemy, uint> visitedTargets = new Dictionary<Enemy, uint>();
     private Vector3 lastSpawnPosition;
     private int state = 0;
     private float bounceTimer = 0f;
@@ -29,10 +35,11 @@ public class CelestialFireballProjectile : SkillProjectileBase
     private List<int> searchResults = new List<int>(50);
 
     // Setup에 체인 관련 변수 3개(chains, cRange, layerMask)와 폭발 크기(boomSize) 추가
-    public void Setup(Transform newTarget, float newSpeed, GameObject trail, float tDamage, float tDuration, float tSpawnDist, 
+    public void Setup(Enemy newTarget, float newSpeed, GameObject trail, float tDamage, float tDuration, float tSpawnDist, 
                       GameObject FireBoomPrefab, float FireBoomDamage, float boomSize, int chains, float cRange , string WeaponID)
     {
         target = newTarget;
+        targetSpawnVersion = target != null ? target.SpawnVersion : 0;
         speed = newSpeed;
         hitRadius = 0.5f;
         maxHits = 999;
@@ -55,7 +62,8 @@ public class CelestialFireballProjectile : SkillProjectileBase
 
         lastSpawnPosition = transform.position;
 
-        if (target != null) RotateTowardsTarget(target.position);
+        if (HasValidTarget)
+            RotateTowardsTarget(target.transform.position);
     }
 
     void Update()
@@ -70,11 +78,17 @@ public class CelestialFireballProjectile : SkillProjectileBase
             return; // 대기 중에는 이동하지 않음
         }
 
-        Vector3 moveDirection = transform.right; 
-        if (target != null && target.gameObject.activeInHierarchy)
+        Vector3 moveDirection = transform.right;
+
+        if (HasValidTarget)
         {
-            moveDirection = (target.position - transform.position).normalized;
-            RotateTowardsTarget(target.position);
+            Vector3 targetPosition = target.transform.position;
+            moveDirection = (targetPosition - transform.position).normalized;
+            RotateTowardsTarget(targetPosition);
+        }
+        else
+        {
+            target = null;
         }
 
         transform.position += moveDirection * speed * Time.deltaTime;
@@ -89,21 +103,31 @@ public class CelestialFireballProjectile : SkillProjectileBase
     void SpawnTrail()
     {
         if (trailPrefab == null) return;
-        GameObject trail = ObjectPoolingManager.Instance.spawnGameObject(trailPrefab, transform.position, Quaternion.identity);
-        
-        if (trail != null && trail.TryGetComponent<AuraZone>(out var trailSkill))
-        {
-            trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f, false, 0f, WeaponID ,trailDuration); 
-        }
-    }
 
+        var pool = ObjectPoolingManager.Instance;
+        if (pool == null) return;
+
+        GameObject trail = pool.spawnGameObject(
+            trailPrefab, transform.position, Quaternion.identity);
+
+        if (trail == null) return;
+
+        if (!trail.TryGetComponent<AuraZone>(out var trailSkill))
+        {
+            pool.ReturnObjectToPool(trail);
+            return;
+        }
+
+        trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f,false, 0f, WeaponID, trailDuration);
+    }
     public override void OnHit(Enemy hitEnemy)
     {
         RunStatisticsManager.Instance.RecordWeaponDamage(WeaponID, damage);
 
-        if (state == 1 || visitedTargets.Contains(hitEnemy)) return;
+        if (state == 1 || HasVisitedTarget(hitEnemy)) return;
 
-        visitedTargets.Add(hitEnemy);
+        if (hitEnemy != null)
+            visitedTargets[hitEnemy] = hitEnemy.SpawnVersion;
 
         if (lastFireBoom != null)
         {
@@ -153,7 +177,7 @@ public class CelestialFireballProjectile : SkillProjectileBase
             Enemy e = EnemySwarmSystem.Instance.TryGetTarget(idx);
             
             // 이미 맞춘 적이거나 죽은 적은 패스
-            if (e == null || e.currentNormalState == Enemy.EnemyState.Dead || visitedTargets.Contains(e)) continue;
+            if (e == null || e.currentNormalState == Enemy.EnemyState.Dead || HasVisitedTarget(e)) continue;
 
             float distSqr = (e.transform.position - transform.position).sqrMagnitude;
             if (distSqr < closestDistSqr)
@@ -165,8 +189,9 @@ public class CelestialFireballProjectile : SkillProjectileBase
 
         if (bestTarget != null)
         {
-            target = bestTarget.transform;
-            RotateTowardsTarget(target.position);
+            target = bestTarget;
+            targetSpawnVersion = target.SpawnVersion;
+            RotateTowardsTarget(target.transform.position);
             lastSpawnPosition = transform.position; // 궤적 기준점 리셋
             state = 0; // 다시 비행 시작!
         }
@@ -175,7 +200,12 @@ public class CelestialFireballProjectile : SkillProjectileBase
             ObjectPoolingManager.Instance.ReturnObjectToPool(gameObject); // 주변에 적이 없으면 소멸
         }
     }
-    
+    private bool HasVisitedTarget(Enemy enemy)
+    {
+        return enemy != null &&
+            visitedTargets.TryGetValue(enemy, out uint version) &&
+            version == enemy.SpawnVersion;
+    }
     private void RotateTowardsTarget(Vector3 targetPos)
     {
         Vector3 direction = targetPos - transform.position;

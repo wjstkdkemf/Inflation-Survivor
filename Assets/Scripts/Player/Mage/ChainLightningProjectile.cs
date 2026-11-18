@@ -10,7 +10,15 @@ public class ChainLightningProjectile : SkillProjectileBase
     private int remainingChains;
     private float chainRange;
     private float damageReduction;
-    private HashSet<Enemy> visitedTargets = new HashSet<Enemy>();
+    private readonly Dictionary<Enemy, uint> visitedTargets = new Dictionary<Enemy, uint>();//어떤 적의 몇 번째 생명을 타격했는지 기록.
+    private readonly HashSet<Enemy> excludedTargets = new HashSet<Enemy>();//그중 현재도 같은 생명인 적만 탐색에서 제외.
+    private uint currentTargetSpawnVersion;
+
+    private bool HasValidCurrentTarget =>
+        currentTarget != null &&
+        currentTarget.isActiveAndEnabled &&
+        currentTarget.currentNormalState != Enemy.EnemyState.Dead &&
+        currentTarget.SpawnVersion == currentTargetSpawnVersion;
     
     private bool isActived = false;
 
@@ -18,6 +26,7 @@ public class ChainLightningProjectile : SkillProjectileBase
     public void Fire(Enemy initialTarget, long startDamage, float projSpeed, int chains, float range, float reduction , string weaponID)
     {
         currentTarget = initialTarget;
+        currentTargetSpawnVersion = currentTarget != null ? currentTarget.SpawnVersion : 0;
         damage = startDamage;
         speed = projSpeed;
         remainingChains = chains;
@@ -29,6 +38,7 @@ public class ChainLightningProjectile : SkillProjectileBase
         maxHits = 1;      // 1프레임당 1마리만 때림 (튕기기 위함)
         
         visitedTargets.Clear();
+        excludedTargets.Clear();
         isActived = true;
 
         RotateTowardsTarget();
@@ -39,10 +49,10 @@ public class ChainLightningProjectile : SkillProjectileBase
         if (!isActived) return;
 
         // 타겟이 내게 오기 전에 다른 공격에 맞아 죽었다면?
-        if (currentTarget == null || currentTarget.currentNormalState == Enemy.EnemyState.Dead)
+        if (!HasValidCurrentTarget)
         {
-            FindNextTarget(); // 멈추지 않고 주변의 다른 놈으로 즉시 궤도 수정!
-            if (!isActived) return; 
+            FindNextTarget();
+            if (!isActived) return;
         }
 
         // 타겟을 향해 이동 (직진이 아니라 유도탄 방식)
@@ -53,7 +63,7 @@ public class ChainLightningProjectile : SkillProjectileBase
     }
     private void RotateTowardsTarget()
     {
-        if (currentTarget == null) return;
+        if (!HasValidCurrentTarget) return;
         Vector3 direction = currentTarget.transform.position - transform.position;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
         transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
@@ -64,10 +74,12 @@ public class ChainLightningProjectile : SkillProjectileBase
 
         isActived = false;
         visitedTargets.Clear();
+        excludedTargets.Clear();
     }
     public override void OnHit(Enemy hitEnemy)
     {
-        visitedTargets.Add(hitEnemy);
+        if (hitEnemy != null)
+            visitedTargets[hitEnemy] = hitEnemy.SpawnVersion;
         RunStatisticsManager.Instance.RecordWeaponDamage(WeaponID, damage);
 
         remainingChains--;
@@ -85,11 +97,22 @@ public class ChainLightningProjectile : SkillProjectileBase
 
     private void FindNextTarget()
     {
-        Enemy nextTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, chainRange, visitedTargets);
+        excludedTargets.Clear();
+
+        foreach (var entry in visitedTargets)
+        {
+            Enemy enemy = entry.Key;
+
+            if (enemy != null && enemy.SpawnVersion == entry.Value)
+                excludedTargets.Add(enemy);
+        }
+
+        Enemy nextTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, chainRange, excludedTargets);
 
         if (nextTarget != null)
         {
             currentTarget = nextTarget;
+            currentTargetSpawnVersion = nextTarget.SpawnVersion;
             RotateTowardsTarget();
         }
         else

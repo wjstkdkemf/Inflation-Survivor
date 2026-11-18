@@ -24,7 +24,13 @@ public class ElementalFireballWeapon : WeaponBase
     private float volleyTimer;
     private int pendingBullets = 0;
     private Enemy currentTarget;
+    private uint currentTargetSpawnVersion;
 
+    private bool HasValidCurrentTarget =>
+        currentTarget != null &&
+        currentTarget.isActiveAndEnabled &&
+        currentTarget.currentNormalState != Enemy.EnemyState.Dead &&
+        currentTarget.SpawnVersion == currentTargetSpawnVersion;
     protected override bool InitializeWeapon(WeaponDataSO data)
     {
         if (data is ElementalFireballSO evoData)
@@ -72,9 +78,7 @@ public class ElementalFireballWeapon : WeaponBase
 
             if (cooldownTimer <= 0f)
             {
-                currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-                
-                if (currentTarget != null)
+                if (TryAcquireTarget())
                 {
                     pendingBullets = bulletNumber;
                     volleyTimer = 0f;
@@ -86,24 +90,20 @@ public class ElementalFireballWeapon : WeaponBase
             volleyTimer -= Time.deltaTime;
             if (volleyTimer <= 0f)
             {
-                FireProjectile(currentTarget);
+                FireProjectile();
             }
         }
     }
-    void FireProjectile(Enemy target)
+    void FireProjectile()
     {
-        // 타겟이 죽었다면 재검색
-        if (target == null || target.currentNormalState == Enemy.EnemyState.Dead)
+        if (!HasValidCurrentTarget && !TryAcquireTarget())
         {
-            currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-            if (currentTarget == null) 
-            {
-                pendingBullets = 0; 
-                cooldownTimer = GetCooldown(fireRate);
-                return;
-            }
-            target = currentTarget;
+            pendingBullets = 0;
+            cooldownTimer = GetCooldown(fireRate);
+            return;
         }
+
+        Enemy target = currentTarget;
 
         var pool = ObjectPoolingManager.Instance;
         if (pool == null) return;
@@ -119,7 +119,7 @@ public class ElementalFireballWeapon : WeaponBase
         long directDamage = GetDamage();
         float finalTrailDamage = directDamage * trailDamageScaling;
         float boomDamage = GetFireBoomDamage();
-        evoScript.Setup(target.transform, projectileSpeed, trailPrefab, finalTrailDamage, trailDuration, trailSpawnDistance,
+        evoScript.Setup(target, projectileSpeed, trailPrefab, finalTrailDamage, trailDuration, trailSpawnDistance,
                         LastFireBoomPrefab, boomDamage, lastFireBoomSize , WeaponID);
         evoScript.damage = directDamage; // 직격 딜 세팅
 
@@ -136,6 +136,18 @@ public class ElementalFireballWeapon : WeaponBase
     public long GetFireBoomDamage()
     {
         return CalculateDamage(currentDamage, 2d);
+    }
+    private bool TryAcquireTarget()
+    {
+        var swarm = EnemySwarmSystem.Instance;
+        currentTarget = swarm != null
+            ? swarm.GetClosestEnemy(transform.position, range)
+            : null;
+
+        currentTargetSpawnVersion =
+            currentTarget != null ? currentTarget.SpawnVersion : 0;
+
+        return HasValidCurrentTarget;
     }
 
     protected override bool RecalculateLevelStats()

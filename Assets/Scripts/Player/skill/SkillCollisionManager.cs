@@ -87,9 +87,8 @@ public class SkillCollisionManager : MonoBehaviour
         {
             if (activeSkills[i] == null || !activeSkills[i].gameObject.activeInHierarchy)
             {
-                if (activeSkills[i] != null)
+                if (!ReferenceEquals(activeSkills[i], null))
                     registeredSkills.Remove(activeSkills[i]);
-
                 activeSkills[i] = activeSkills[activeSkills.Count - 1];
                 activeSkills.RemoveAt(activeSkills.Count - 1);
             }

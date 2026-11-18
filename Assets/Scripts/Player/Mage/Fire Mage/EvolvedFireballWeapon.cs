@@ -19,6 +19,13 @@ public class EvolvedFireballWeapon : WeaponBase
     private float volleyTimer;
     private int pendingBullets = 0;
     private Enemy currentTarget;
+    private uint currentTargetSpawnVersion;
+
+    private bool HasValidCurrentTarget =>
+        currentTarget != null &&
+        currentTarget.isActiveAndEnabled &&
+        currentTarget.currentNormalState != Enemy.EnemyState.Dead &&
+        currentTarget.SpawnVersion == currentTargetSpawnVersion;
 
     protected override bool InitializeWeapon(WeaponDataSO data)
     {
@@ -63,10 +70,7 @@ public class EvolvedFireballWeapon : WeaponBase
 
             if (cooldownTimer <= 0f)
             {
-                // 인덱스 레이더로 단일 타겟 서치!
-                currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-                
-                if (currentTarget != null)
+                if (TryAcquireTarget())
                 {
                     pendingBullets = bulletNumber;
                     volleyTimer = 0f;
@@ -78,24 +82,21 @@ public class EvolvedFireballWeapon : WeaponBase
             volleyTimer -= Time.deltaTime;
             if (volleyTimer <= 0f)
             {
-                FireProjectile(currentTarget);
+                FireProjectile();
             }
         }
     }
 
-    void FireProjectile(Enemy target)
+    void FireProjectile()
     {
-        if (target == null || target.currentNormalState == Enemy.EnemyState.Dead)
+        if (!HasValidCurrentTarget && !TryAcquireTarget())
         {
-            currentTarget = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, range);
-            if (currentTarget == null) 
-            {
-                pendingBullets = 0;
-                cooldownTimer = GetCooldown(fireRate);
-                return;
-            }
-            target = currentTarget;
+            pendingBullets = 0;
+            cooldownTimer = GetCooldown(fireRate);
+            return;
         }
+
+        Enemy target = currentTarget;
 
         var pool = ObjectPoolingManager.Instance;
         if (pool == null) return;
@@ -110,7 +111,7 @@ public class EvolvedFireballWeapon : WeaponBase
 
         long directDamage = GetDamage();
         float finalTrailDamage = directDamage * trailDamageScaling;
-        evoScript.SetupEvo(target.transform, projectileSpeed, trailPrefab, directDamage, finalTrailDamage, trailDuration, trailSpawnDistance , WeaponID);
+        evoScript.SetupEvo(target, projectileSpeed, trailPrefab, directDamage, finalTrailDamage, trailDuration, trailSpawnDistance , WeaponID);
 
         pendingBullets--;
 
@@ -128,6 +129,17 @@ public class EvolvedFireballWeapon : WeaponBase
     public long GetDamage()
     {
         return CalculateDamage(currentDamage);
+    }
+    private bool TryAcquireTarget()
+    {
+        var swarm = EnemySwarmSystem.Instance;
+        currentTarget = 
+            swarm != null ? swarm.GetClosestEnemy(transform.position, range) : null;
+
+        currentTargetSpawnVersion =
+            currentTarget != null ? currentTarget.SpawnVersion : 0;
+
+        return HasValidCurrentTarget;
     }
 
     protected override bool RecalculateLevelStats()

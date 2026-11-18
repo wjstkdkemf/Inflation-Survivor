@@ -11,9 +11,17 @@ public class EnemyProjectileManager : MonoBehaviour
 
     public List<EnemyProjectile> activeProjectiles = new List<EnemyProjectile>(1000);
     private readonly HashSet<EnemyProjectile> registeredProjectiles = new HashSet<EnemyProjectile>();
+    private readonly Dictionary<int, bool> hitMap = new Dictionary<int, bool>();
+    private readonly List<int> sortedIndices = new List<int>();
 
     private NativeArray<float2> projectilePositions;
+    private NativeList<int> wallHitIndices;
+    private NativeList<int> playerHitIndices;
     public float playerHitRadius = 0.3f; 
+    private GameObject boundPlayer;
+    private Transform cachedPlayerCenter;
+    private IDamageable cachedPlayerDamageable;
+    private Component cachedDamageableComponent;
 
     private void Awake()
     {
@@ -33,7 +41,34 @@ public class EnemyProjectileManager : MonoBehaviour
             Instance = null;
         }
 
-        if (projectilePositions.IsCreated) projectilePositions.Dispose();
+        if (projectilePositions.IsCreated) 
+            projectilePositions.Dispose();
+        if (wallHitIndices.IsCreated)
+            wallHitIndices.Dispose();
+        if (playerHitIndices.IsCreated)
+            playerHitIndices.Dispose();
+    }
+    public bool BindPlayer(GameObject player)
+    {
+        boundPlayer = null;
+        cachedPlayerCenter = null;
+        cachedPlayerDamageable = null;
+        cachedDamageableComponent = null;
+
+        if (player == null) return false;
+
+        var damageable = player.GetComponent<IDamageable>();
+        var component = damageable as Component;
+        if (component == null) return false;
+
+        boundPlayer = player;
+        cachedPlayerCenter = player.transform.Find("CenterPosition");
+        if (cachedPlayerCenter == null)
+            cachedPlayerCenter = player.transform;
+
+        cachedPlayerDamageable = damageable;
+        cachedDamageableComponent = component;
+        return true;
     }
 
     public void RegisterProjectile(EnemyProjectile projectile)
@@ -47,7 +82,7 @@ public class EnemyProjectileManager : MonoBehaviour
 
     public void UnregisterProjectile(EnemyProjectile projectile)
     {
-        if (projectile == null || !registeredProjectiles.Remove(projectile))
+        if (ReferenceEquals(projectile, null) || !registeredProjectiles.Remove(projectile))
             return;
 
         int index = activeProjectiles.IndexOf(projectile);
@@ -63,13 +98,16 @@ public class EnemyProjectileManager : MonoBehaviour
     {
         for (int i = activeProjectiles.Count - 1; i >= 0; i--)
         {
-            if (activeProjectiles[i] == null || !activeProjectiles[i].gameObject.activeInHierarchy)
-            {
-                if (activeProjectiles[i] != null)
-                    registeredProjectiles.Remove(activeProjectiles[i]);
+            EnemyProjectile projectile = activeProjectiles[i];
 
-                activeProjectiles[i] = activeProjectiles[activeProjectiles.Count - 1];
-                activeProjectiles.RemoveAt(activeProjectiles.Count - 1);
+            if (projectile == null || !projectile.gameObject.activeInHierarchy)
+            {
+                if (!ReferenceEquals(projectile, null))
+                    registeredProjectiles.Remove(projectile);
+
+                int lastIndex = activeProjectiles.Count - 1;
+                activeProjectiles[i] = activeProjectiles[lastIndex];
+                activeProjectiles.RemoveAt(lastIndex);
             }
         }
         var gameManager = GameManager.Instance;
@@ -99,8 +137,22 @@ public class EnemyProjectileManager : MonoBehaviour
         float3 playerPos3 = playerCenter.position;
         float2 playerPos = playerPos3.xy;
 
-        NativeList<int> wallHitIndices = new NativeList<int>(count, Allocator.TempJob);
-        NativeList<int> playerHitIndices = new NativeList<int>(count, Allocator.TempJob);
+        int capacity = projectilePositions.Length;
+
+        if (!wallHitIndices.IsCreated)
+            wallHitIndices = new NativeList<int>(capacity, Allocator.Persistent);
+
+        if (!playerHitIndices.IsCreated)
+            playerHitIndices = new NativeList<int>(capacity, Allocator.Persistent);
+
+        wallHitIndices.Clear();
+        playerHitIndices.Clear();
+
+        if (wallHitIndices.Capacity < capacity)
+            wallHitIndices.Capacity = capacity;
+
+        if (playerHitIndices.Capacity < capacity)
+            playerHitIndices.Capacity = capacity;
 
         ProjectileCollisionJob job = new ProjectileCollisionJob
         {
@@ -119,10 +171,6 @@ public class EnemyProjectileManager : MonoBehaviour
         handle.Complete();
 
         ProcessCollisionResults(wallHitIndices, playerHitIndices, playerDamageable);
-
-        // 임시 리스트 메모리 해제
-        wallHitIndices.Dispose();
-        playerHitIndices.Dispose();
     }
 
     private void ProcessCollisionResults(
@@ -130,7 +178,11 @@ public class EnemyProjectileManager : MonoBehaviour
         NativeList<int> playerHitIndices,
         IDamageable playerDamageable)
     {
-        Dictionary<int, bool> hitMap = new Dictionary<int, bool>();
+        hitMap.Clear();
+        sortedIndices.Clear();
+
+        if (wallHitIndices.Length == 0 && playerHitIndices.Length == 0)
+            return;
 
         for (int i = 0; i < wallHitIndices.Length; i++)
         {
@@ -145,7 +197,7 @@ public class EnemyProjectileManager : MonoBehaviour
             hitMap[index] = true;
         }
 
-        List<int> sortedIndices = new List<int>(hitMap.Keys);
+        sortedIndices.AddRange(hitMap.Keys);
         sortedIndices.Sort((a, b) => b.CompareTo(a));
 
         var gameManager = GameManager.Instance;
@@ -178,16 +230,15 @@ public class EnemyProjectileManager : MonoBehaviour
         playerCenter = null;
         playerDamageable = null;
 
-        if (GameManager.Instance == null || GameManager.Instance.Player == null)
+        var gameManager = GameManager.Instance;
+        if (gameManager == null || boundPlayer == null ||
+            gameManager.Player != boundPlayer ||
+            cachedPlayerCenter == null || cachedDamageableComponent == null)
             return false;
 
-        GameObject playerObject = GameManager.Instance.Player;
-        playerCenter = playerObject.transform.Find("CenterPosition");
-        if (playerCenter == null)
-            playerCenter = playerObject.transform;
-
-        playerDamageable = playerObject.GetComponent<IDamageable>();
-        return playerDamageable != null;
+        playerCenter = cachedPlayerCenter;
+        playerDamageable = cachedPlayerDamageable;
+        return true;
     }
 
     private bool TryGetReadyWorld(out float cellSize, out NativeParallelHashMap<Vector2Int, byte> globalWallMap)

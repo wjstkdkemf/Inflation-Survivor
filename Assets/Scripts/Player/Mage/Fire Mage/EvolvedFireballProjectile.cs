@@ -2,7 +2,14 @@ using UnityEngine;
 
 public class EvolvedFireballProjectile : SkillProjectileBase
 {
-    private Transform target;
+    private Enemy target;
+    private uint targetSpawnVersion;
+
+    private bool HasValidTarget =>
+        target != null &&
+        target.isActiveAndEnabled &&
+        target.currentNormalState != Enemy.EnemyState.Dead &&
+        target.SpawnVersion == targetSpawnVersion;
     private float speed;
     
     // 장판 관련 데이터
@@ -12,9 +19,10 @@ public class EvolvedFireballProjectile : SkillProjectileBase
     private float spawnDistanceThreshold;
 
     private Vector3 lastSpawnPosition; // 마지막으로 장판을 깐 위치
-    public void SetupEvo(Transform newTarget, float newSpeed, GameObject trail, long directDmg, float tDamage, float tDuration, float tSpawnDist , string weaponID)
+    public void SetupEvo(Enemy newTarget, float newSpeed, GameObject trail, long directDmg, float tDamage, float tDuration, float tSpawnDist , string weaponID)
     {
         target = newTarget;
+        targetSpawnVersion = target != null ? target.SpawnVersion : 0;
         speed = newSpeed;
         damage = directDmg;
         hitRadius = 0.5f; // 알바생(Job)이 쓸 투사체 직격 크기
@@ -29,19 +37,22 @@ public class EvolvedFireballProjectile : SkillProjectileBase
 
         lastSpawnPosition = transform.position;
 
-        if (target != null)
-        {
-            RotateTowardsTarget(target.position);
-        }
+        if (HasValidTarget)
+            RotateTowardsTarget(target.transform.position);
     }
     void Update()
     {
-        Vector3 moveDirection = transform.right; // 기본 직진
+        Vector3 moveDirection = transform.right;
 
-        if (target != null)
+        if (HasValidTarget)
         {
-            moveDirection = (target.position - transform.position).normalized;
-            RotateTowardsTarget(target.position);
+            Vector3 targetPosition = target.transform.position;
+            moveDirection = (targetPosition - transform.position).normalized;
+            RotateTowardsTarget(targetPosition);
+        }
+        else
+        {
+            target = null;
         }
 
         transform.position += moveDirection * speed * Time.deltaTime;
@@ -57,12 +68,21 @@ public class EvolvedFireballProjectile : SkillProjectileBase
     {
         if (trailPrefab == null) return;
 
-        GameObject trail = ObjectPoolingManager.Instance.spawnGameObject(trailPrefab, transform.position, Quaternion.identity);
+        var pool = ObjectPoolingManager.Instance;
+        if (pool == null) return;
 
-        if (trail != null && trail.TryGetComponent<AuraZone>(out var trailSkill))
+        GameObject trail = pool.spawnGameObject(
+            trailPrefab, transform.position, Quaternion.identity);
+
+        if (trail == null) return;
+
+        if (!trail.TryGetComponent<AuraZone>(out var trailSkill))
         {
-            trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f, false, 0f, WeaponID , trailDuration); 
+            pool.ReturnObjectToPool(trail);
+            return;
         }
+
+        trailSkill.SetupAura(0.5f, (long)trailDamage, 1.5f,false, 0f, WeaponID, trailDuration);
     }
     
     private void RotateTowardsTarget(Vector3 targetPos)
