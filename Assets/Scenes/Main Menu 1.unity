@@ -1863,7 +1863,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   StopMoveing: 0
-  Pause: 0
   TextKill: {fileID: 0}
   Player_Level_Count: {fileID: 0}
   NumberOfKills: 0
@@ -19916,6 +19915,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   loadingCanvasPrefab: {fileID: 6628656425712436479, guid: 1a228ebc5095e8342a07813565a5dd60, type: 3}
+  failureNoticePrefab: {fileID: 1992362088314580141, guid: 8ff69cb1460976a4da74b62c79f7a2cb, type: 3}
 --- !u!1 &1633211242
 GameObject:
   m_ObjectHideFlags: 0
@@ -24561,7 +24561,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 8.185974, y: 300}
+  m_AnchoredPosition: {x: 8.186035, y: 300}
   m_SizeDelta: {x: 161.612, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &5865741487398240558

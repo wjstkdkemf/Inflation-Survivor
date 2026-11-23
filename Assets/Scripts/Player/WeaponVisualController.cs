@@ -15,12 +15,18 @@ public class WeaponVisualController : MonoBehaviour
 
     private Vector3 baseLocalPosition;
     private Transform target;
+    private Enemy targetEnemy;
+    private uint targetSpawnVersion;
+    private bool targetIsEnemy;
     private Vector2 aimDirection = Vector2.right;
 
 
     public void SetTarget(Transform newTarget)
     {
         target = newTarget;
+        targetEnemy = target != null ? target.GetComponentInParent<Enemy>() : null;
+        targetIsEnemy = targetEnemy != null;
+        targetSpawnVersion = targetIsEnemy ? targetEnemy.SpawnVersion : 0;
     }
 
     public void SetBaseLocalPosition(Vector3 position)
@@ -80,6 +86,14 @@ public class WeaponVisualController : MonoBehaviour
 
     private void UpdateFaceTarget()
     {
+        if (targetIsEnemy &&
+            (targetEnemy == null || !targetEnemy.isActiveAndEnabled ||
+             targetEnemy.currentNormalState == Enemy.EnemyState.Dead ||
+             targetEnemy.SpawnVersion != targetSpawnVersion))
+        {
+            SetTarget(null);
+        }
+
         if (target == null || player == null)
         {
             UpdateFaceDirection();

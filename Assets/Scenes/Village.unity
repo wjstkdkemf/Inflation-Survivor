@@ -42180,7 +42180,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   StopMoveing: 0
-  Pause: 0
   TextKill: {fileID: 0}
   Player_Level_Count: {fileID: 0}
   NumberOfKills: 0

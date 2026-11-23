@@ -203,21 +203,41 @@ public class InventoryManager : MonoBehaviour
       {
           return Path.Combine(Application.persistentDataPath, fileName);
       }
-    public void SaveAllInventories(string fileName)
+    public bool TrySaveAllInventories(string fileName)
     {
-        if (InventoryController.instance == null)
+        var controller = InventoryController.instance;
+        if (controller == null)
         {
-            Debug.LogError("저장 실패: InventoryController 인스턴스를 찾을 수 없습니다.");
-            return;
+            Debug.LogError("[InventoryManager] 인벤토리 컨트롤러가 없어 저장하지 못했습니다.");
+            return false;
         }
 
-        // InventoryController에서 모든 인벤토리 데이터를 JSON 문자열로 가져옵니다.
-        string jsonData = InventoryController.instance.GetSaveData();
+        try
+        {
+            string json = controller.GetSaveData();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                Debug.LogError("[InventoryManager] 저장할 JSON이 생성되지 않았습니다.");
+                return false;
+            }
 
-        // JSON 문자열을 파일에 씁니다.
-        File.WriteAllText(GetFullPath(fileName), jsonData);
+            string path = GetFullPath(fileName);
+            string tempPath = path + ".tmp";
 
-        DevLog.Log($"모든 인벤토리가 {GetFullPath(fileName)} 파일에 저장되었습니다.");
+            File.WriteAllText(tempPath, json);
+
+            if (File.Exists(path))
+                File.Replace(tempPath, path, null);
+            else
+                File.Move(tempPath, path);
+
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+            return false;
+        }
     }
     public void LoadAllInventories(string fileName)
     {
@@ -245,6 +265,29 @@ public class InventoryManager : MonoBehaviour
             Debug.LogWarning($"저장 파일을 찾을 수 없습니다: {path}. 인벤토리를 비웁니다.");
             // 저장 파일이 없으면 모든 인벤토리를 깨끗하게 비웁니다.
             InventoryController.instance.ClearAllInventories();
+        }
+    }
+    public bool TryRestoreAllInventories(string fileName)
+    {
+        var controller = InventoryController.instance;
+        if (controller == null)
+            return false;
+
+        try
+        {
+            string path = GetFullPath(fileName);
+            if (!File.Exists(path))
+            {
+                Debug.LogError($"[InventoryManager] Recovery file missing: {path}");
+                return false;
+            }
+
+            return controller.TryRestoreFromData(File.ReadAllText(path));
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+            return false;
         }
     }
     public void DeleteSavedInventoryFile(string fileName)

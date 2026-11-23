@@ -18,6 +18,10 @@ public class LightningSparkAbility : MonoBehaviour
 
     void Update()
     {
+        var gameManager = GameManager.Instance;
+        if (gameManager == null || !gameManager.CanProcessCombat)
+            return;
+
         if (bounces <= 0)
         {
             return; // 스킬 레벨이 0 이하면 아무것도 하지 않음
@@ -40,13 +44,29 @@ public class LightningSparkAbility : MonoBehaviour
             yield break;
 
         enemies = enemies.OrderBy(e => Vector2.Distance(transform.position, e.transform.position)).ToList();
+        var spawnVersions = new Dictionary<Enemy, uint>(enemies.Count);
+        foreach (Enemy enemy in enemies)
+            spawnVersions[enemy] = enemy.SpawnVersion;
+
         Enemy currentEnemy = enemies[0];
 
         Vector2 lastPosition = transform.position;
 
         for (int i = 0; i < bounces + 1; i++)
         {
-            if (currentEnemy == null)
+            while (true)
+            {
+                var gameManager = GameManager.Instance;
+
+                if (gameManager == null)
+                    yield break;
+
+                if (gameManager.CanProcessCombat)
+                    break;
+
+                yield return null;
+            }
+            if (!IsValidTarget(currentEnemy, spawnVersions))
                 break;
 
             GameObject spark = Instantiate(lightningSparkPrefab, Vector3.zero, Quaternion.identity);
@@ -56,11 +76,11 @@ public class LightningSparkAbility : MonoBehaviour
 
             GenerateLightning(lineRenderer , lastPosition , currentEnemy.transform.position);
 
+            lastPosition = currentEnemy.transform.position;
             currentEnemy.GetComponent<IDamageable>().TakeDamage(damage);
 
-            lastPosition = currentEnemy.transform.position;
-
             enemies.Remove(currentEnemy);
+            enemies.RemoveAll(enemy => !IsValidTarget(enemy, spawnVersions));
 
             if (enemies.Count == 0)
                 break;
@@ -70,6 +90,14 @@ public class LightningSparkAbility : MonoBehaviour
 
             yield return new WaitForSeconds(0.1f);
         }
+    }
+
+    private static bool IsValidTarget(Enemy enemy, Dictionary<Enemy, uint> spawnVersions)
+    {
+        return enemy != null && enemy.isActiveAndEnabled &&
+            enemy.currentNormalState != Enemy.EnemyState.Dead &&
+            spawnVersions.TryGetValue(enemy, out uint version) &&
+            enemy.SpawnVersion == version;
     }
     
     void GenerateLightning(LineRenderer lineRenderer , Vector2 startpoint , Vector2 endpoint)

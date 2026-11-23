@@ -682,11 +682,22 @@ namespace InventorySystem
                 }
                 if (InventoryController.instance.checkEnabled(movePress[key]))
                 {
-                    InventoryController.instance.TransferItem(inventoryName, movePress[key], item);
+                    var result = InventoryController.instance.TransferItem(
+                    inventoryName, movePress[key], item);
+
+                    if (result.Remaining > 0 && MenuButtonController.Instance != null)
+                    {
+                        bool partiallyProcessed = result.Added > 0 || result.Converted > 0;
+                        string message = partiallyProcessed
+                            ? $"처리되지 않은 아이템 {result.Remaining}개가 원래 슬롯에 남았습니다."
+                            : "아이템을 이동할 수 없습니다.";
+
+                        MenuButtonController.Instance.ScreenMessage(message);
+                    }
                 }
-                else
+                else if (MenuButtonController.Instance != null)
                 {
-                    Debug.Log("Inventory cannot fit item or Inventory disabled");
+                    MenuButtonController.Instance.ScreenMessage("대상 인벤토리를 연 뒤 다시 시도하세요.");
                 }
             }
         }

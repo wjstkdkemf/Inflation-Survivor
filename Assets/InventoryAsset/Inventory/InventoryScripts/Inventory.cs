@@ -68,44 +68,27 @@ namespace InventorySystem
         /// </summary>
         public void Resize(int newSize)
         {
-            if (inventoryList != null)
+            if (newSize < 0)
             {
-                itemPositions = new Dictionary<string, List<int>>();
-                List<InventoryItem> newlist = new List<InventoryItem>();
-
-                if (size < newSize)
-                {
-                    for (int i = 0; i < inventoryList.Count; i++)
-                    {
-                        InventoryItem item = inventoryList[i];
-                        newlist.Add(item);
-                        AddItemHelper(item, i, false);
-
-                    }
-                    for (int i = newlist.Count; i < newSize; i++)
-                    {
-                        InventoryItem filler = new InventoryItem(true);
-                        newlist.Add(filler);
-                        AddItemHelper(filler, i, false);
-
-                    }
-                }
-                else
-                {
-                    for (int i = 0; i < newSize; i++)
-                    {
-                        InventoryItem item = inventoryList[i];
-                        newlist.Add(item);
-                        AddItemHelper(item, i, false);
-
-                    }
-                }
-                inventoryList.Clear();
-
-                inventoryList = newlist;
-
+                Debug.LogError($"[Inventory] 잘못된 인벤토리 크기: {newSize}");
+                return;
             }
+
             size = newSize;
+
+            if (inventoryList == null)
+                return;
+
+            if (inventoryList.Count > newSize)
+                inventoryList.RemoveRange(newSize, inventoryList.Count - newSize);
+
+            while (inventoryList.Count < newSize)
+                inventoryList.Add(new InventoryItem(true));
+
+            if (itemPositions == null)
+                itemPositions = new Dictionary<string, List<int>>();
+
+            RebuildItemPositions();
         }
         /// <summary>
         /// Empties inventory
@@ -344,12 +327,9 @@ namespace InventorySystem
                 newItem.SetInventory(inventoryName);
 
                 InventoryItem oldItem = inventoryList[pos];
-                if (oldItem != null && !oldItem.GetIsNull())
-                {
-                    RemovePosition(oldItem.GetItemType(), pos);
-                }
+                string oldKey = oldItem == null || oldItem.GetIsNull() ? EmptyKey : oldItem.GetItemType();
 
-                RemovePosition(EmptyKey, pos);
+                RemovePosition(oldKey, pos);
                 AddPosition(newItem.GetItemType(), pos);
 
                 inventoryList[pos] = newItem;
@@ -372,6 +352,8 @@ namespace InventorySystem
         /// </summary>
         public void EraseItemInPosition(int pos, bool invokeEnterExit = true)
         {
+            if (!IsValidPosition(pos))
+                return;
             RemoveItemHelper(inventoryList[pos], pos, invokeEnterExit);
         }
 
@@ -380,6 +362,8 @@ namespace InventorySystem
         /// </summary>
         public void RemoveItemInPosition(int pos, int amount)
         {
+            if (amount <= 0 || !IsValidPosition(pos))
+                return;
             InventoryItem item = inventoryList[pos];
             if (!item.GetIsNull())
             {
@@ -424,45 +408,34 @@ namespace InventorySystem
 
         private void RemovePosition(string key, int pos)
         {
-            if (!itemPositions.TryGetValue(key, out var positions))
+            if (!itemPositions.TryGetValue(key, out var positions) || !positions.Remove(pos))
             {
-                Debug.LogWarning($"[Inventory] Tried to remove position {pos} from missing key '{key}'. Rebuilding positions.");
+                Debug.LogWarning($"[Inventory] 위치표 불일치: {key}, 슬롯 {pos}. 재구축합니다.");
                 RebuildItemPositions();
-                return;
-            }
 
-            positions.Remove(pos);
+                if (!itemPositions.TryGetValue(key, out positions) || !positions.Remove(pos))
+                    return;
+            }
 
             if (positions.Count == 0 && key != EmptyKey)
-            {
                 itemPositions.Remove(key);
-            }
-        } 
+        }
         public void RemoveItemInPosition(InventoryItem item, int amount)
         {
+            if (item == null || item.GetIsNull() || amount <= 0)
+                return;
+
             int pos = item.GetPosition();
-            if (!item.GetIsNull())
-            {
-                if (itemPositions.ContainsKey(item.GetItemType()))
-                {
-                    if (item.GetAmount() - amount > 0)
-                    {
-                        item.SetAmount(item.GetAmount() - amount);
-                        InventoryUIManagerInstance.UpdateSlot(pos);
-                    }
-                    else
-                    {
-                        RemoveItemHelper(item, pos);
-                    }
-                }
-                else
-                {
-                    Debug.LogWarning("ItemPositions Dictitonary Setup Incorrectly");
-                }
-            }
+            if (!IsValidPosition(pos) || !ReferenceEquals(inventoryList[pos], item))
+                return;
+
+            RemoveItemInPosition(pos, amount);
         }
         public void RemoveItemAuto(string itemType, int amount)
         {
+            if (amount <= 0)
+                return;
+
             if(!itemPositions.ContainsKey(itemType))
             {
                 RebuildItemPositions();
@@ -545,23 +518,17 @@ namespace InventorySystem
         /// </summary>
         public void RemoveItemHelper(string item, int pos, bool invokeEnterExit = true)
         {
-            string empty = "Empty";
-            itemPositions[item].Remove(pos);
-            if (itemPositions.ContainsKey(empty))
+            if (!IsValidPosition(pos))
+                return;
+
+            InventoryItem current = inventoryList[pos];
+            if (current == null || current.GetIsNull() || current.GetItemType() != item)
             {
-                itemPositions[empty].Add(pos);
-
+                Debug.LogWarning($"[Inventory] 제거 대상 불일치: {item}, 슬롯 {pos}");
+                return;
             }
-            InventoryItem filler = new InventoryItem(true);
 
-            inventoryList[pos] = filler;
-            InventoryUIManagerInstance.UpdateSlot(pos);
-            if (invokeEnterExit && exitDict != null && exitDict.ContainsKey(pos))
-            {
-                exitDict[pos].Invoke(inventoryList[pos]);
-            }
-            InventoryUIManagerInstance.UpdateSlot(pos);
-
+            RemoveItemHelper(current, pos, invokeEnterExit);
         }
         private bool IsValidPosition(int pos)
         {

@@ -19,7 +19,12 @@ public class LoadingManager : MonoBehaviour
     private GameObject loadingCanvasInstance;
     private Slider progressBar;
     private TextMeshProUGUI loadingText;
-    private bool isLoading;
+    [SerializeField] private LoadFailureNotice failureNoticePrefab;
+    private bool isLoading; // 목적지 시도부터 복귀 종료까지, 전체 전환 동안 새 요청 차단.
+    private bool lastLoadSucceeded; // 방금 끝난 한 번의 씬 로딩 결과.
+    public bool IsFailureRecovery { get; private set; } // 두 번째 LoadSequence() 동안만 true. 마을 Setup이 이 값을 보고 정산·자동 저장을 건너뜀.
+    private string returnSceneName;
+    private string pendingFailureMessage;
 
     private void Awake()
     {
@@ -36,26 +41,35 @@ public class LoadingManager : MonoBehaviour
 
     public void LoadScene(string sceneName)
     {
-        if (string.IsNullOrEmpty(sceneName))
+        TryLoadScene(sceneName);
+    }
+
+    public bool TryLoadScene(string sceneName)
+    {
+        if (string.IsNullOrWhiteSpace(sceneName))
         {
-            Debug.LogWarning("[LoadingManager] Cannot load scene because scene name is empty.");
-            return;
-        }
-        if (isLoading)
-        {
-            Debug.LogWarning($"[LoadingManager] Scene load already in progress. Ignored request: {sceneName}");
-            return;
-        }
-        if (!Application.CanStreamedLevelBeLoaded(sceneName))
-        {
-            Debug.LogError($"[LoadingManager] Scene cannot be loaded: {sceneName}");
-            return;
+            Debug.LogWarning("[LoadingManager] 이동할 씬 이름이 비어 있습니다.");
+            return false;
         }
 
-        // [핵심 추가] 로딩을 시작하기 전에, 현재 씬(떠나는 씬)의 이름을 기록해둡니다.
-        PreviousSceneName = SceneManager.GetActiveScene().name;
-        
-        StartCoroutine(LoadSequence(sceneName));
+        if (isLoading || IsFailureRecovery)
+        {
+            Debug.LogWarning($"[LoadingManager] 이미 씬 전환 중입니다: {sceneName}");
+            return false;
+        }
+
+        if (!Application.CanStreamedLevelBeLoaded(sceneName))
+        {
+            Debug.LogError($"[LoadingManager] 로드할 수 없는 씬입니다: {sceneName}");
+            return false;
+        }
+
+        returnSceneName = SceneManager.GetActiveScene().name;
+        PreviousSceneName = returnSceneName;
+        pendingFailureMessage = null;
+
+        StartCoroutine(LoadWithRecovery(sceneName));
+        return true;
     }
 
     public void LoadScene(int sceneIndex)
@@ -70,10 +84,60 @@ public class LoadingManager : MonoBehaviour
         LoadScene(Path.GetFileNameWithoutExtension(scenePath));
     }
 
-    private IEnumerator LoadSequence(string sceneName)
+    private IEnumerator LoadWithRecovery(string destination)
     {
         isLoading = true;
+        try
+        {
+            yield return LoadSequence(destination);
 
+            if (lastLoadSucceeded || pendingFailureMessage == null)
+                yield break;
+
+            bool canRecover =
+                (returnSceneName == "Main Menu 1" && destination == "Village") ||
+                (returnSceneName == "Village" && destination == "GameplayScene");
+
+            if (!canRecover)
+                yield break;
+
+            PreviousSceneName = SceneManager.GetActiveScene().name;
+            IsFailureRecovery = true;
+
+            yield return LoadSequence(returnSceneName);
+
+            if (!lastLoadSucceeded)
+            {
+                pendingFailureMessage = null;
+                Debug.LogError($"[LoadingManager] 출발 씬 복귀 실패: {returnSceneName}");
+                yield break;
+            }
+            if (returnSceneName == "Main Menu 1" && Time.timeScale == 0f &&
+                (GameManager.Instance == null || !GameManager.Instance.Pause))
+            {
+                Time.timeScale = 1f;
+            }
+            string message = pendingFailureMessage;
+            pendingFailureMessage = null;
+
+            if (!string.IsNullOrEmpty(message))
+            {
+                if (failureNoticePrefab != null)
+                    Instantiate(failureNoticePrefab).Show(message);
+                else
+                    Debug.LogError($"[LoadingManager] 실패 안내창 프리팹 누락: {message}");
+            }
+            // 복귀 성공. pendingFailureMessage는 다음 단계에서 안내창이 소비한다.
+        }
+        finally
+        {
+            IsFailureRecovery = false;
+            isLoading = false;
+        }
+    }
+    private IEnumerator LoadSequence(string sceneName)
+    {
+        lastLoadSucceeded = false;
         // ... (이전과 동일한 로딩 시퀀스 로직) ...
         // 1. 로딩 UI 생성
         if (loadingCanvasInstance == null)
@@ -81,7 +145,6 @@ public class LoadingManager : MonoBehaviour
             if (loadingCanvasPrefab == null)
             {
                 Debug.LogError("[LoadingManager] Loading canvas prefab is missing.");
-                isLoading = false;
                 yield break;
             }
 
@@ -99,6 +162,7 @@ public class LoadingManager : MonoBehaviour
         if (previousGameManager != null)
             previousGameManager.RequestPause(this, true);
 
+        string initializationError = null;
         try
         {
             yield return PrepareCurrentSceneForExit();
@@ -117,7 +181,6 @@ public class LoadingManager : MonoBehaviour
             {
                 Debug.LogError($"[LoadingManager] Failed to start loading scene: {sceneName}");
                 loadingCanvasInstance.SetActive(false);
-                isLoading = false;
                 yield break;
             }
 
@@ -140,10 +203,43 @@ public class LoadingManager : MonoBehaviour
             if (progressBar != null)
                 progressBar.value = 0.8f;
 
-            var initializers = FindObjectsOfType<MonoBehaviour>().OfType<ISceneInitializer>();
+            var loadedScene = SceneManager.GetActiveScene();
+
+            var initializers = FindObjectsOfType<MonoBehaviour>()
+                                .Where(component => component.gameObject.scene == loadedScene &&
+                                                    component.isActiveAndEnabled)
+                                .OfType<ISceneInitializer>()
+                                .ToArray();
+
+            if (loadedScene.name == "Village" &&
+                !initializers.Any(setup => setup is VillageSceneSetup))
+            {
+                initializationError = "마을 씬에 활성화된 VillageSceneSetup이 없습니다.";
+            }
+            else if (loadedScene.name == "GameplayScene" &&
+                    !initializers.Any(setup => setup is DungeonSceneSetup))
+            {
+                initializationError = "던전 씬에 활성화된 DungeonSceneSetup이 없습니다.";
+            }
+
+            if (initializationError != null)
+            {
+                Debug.LogError($"[LoadingManager] {initializationError}");
+                yield break;
+            }
             foreach (var initializer in initializers)
             {
                 yield return StartCoroutine(initializer.Initialize());
+
+                if (!initializer.InitializationSucceeded)
+                {
+                    initializationError = string.IsNullOrEmpty(initializer.InitializationError)
+                                        ? $"{initializer.GetType().Name}: 초기화를 완료하지 못했습니다."
+                                        : initializer.InitializationError;
+
+                    Debug.LogError($"[LoadingManager] {initializationError}");
+                    yield break;
+                }
             }
 
             if (progressBar != null)
@@ -151,16 +247,29 @@ public class LoadingManager : MonoBehaviour
             if (loadingText != null)
                 loadingText.text = "완료!";
             yield return new WaitForSecondsRealtime(0.5f);
+
+            lastLoadSucceeded = true;
         }
         finally
         {
             if (previousGameManager != null)
                 previousGameManager.RequestPause(this, false);
 
-            if (loadingCanvasInstance != null)
-                loadingCanvasInstance.SetActive(false);
+            if (initializationError != null)
+            {
+                pendingFailureMessage = "화면을 불러오지 못해 이전 화면으로 돌아왔습니다.";
+                if (loadingText != null)
+                    loadingText.text = $"초기화 실패\n{initializationError}";
 
-            isLoading = false;
+                var currentGameManager = GameManager.Instance;
+                if (currentGameManager != null)
+                    currentGameManager.RequestPause(this, true);
+            }
+            else
+            {
+                if (loadingCanvasInstance != null)
+                    loadingCanvasInstance.SetActive(false);
+            }
         }
     }
     private IEnumerator PrepareCurrentSceneForExit()

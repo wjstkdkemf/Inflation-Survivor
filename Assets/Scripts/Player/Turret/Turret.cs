@@ -13,6 +13,16 @@ public class Turret : AttackBase
 
     private float targetUpdateTimer;
     private Transform closestEnemyPosition;
+    private Enemy targetEnemy;
+    private uint targetSpawnVersion;
+    private bool targetIsEnemy;
+
+    private bool HasValidTarget =>
+        closestEnemyPosition != null && closestEnemyPosition.gameObject.activeInHierarchy &&
+        (!targetIsEnemy ||
+         (targetEnemy != null && targetEnemy.isActiveAndEnabled &&
+          targetEnemy.currentNormalState != Enemy.EnemyState.Dead &&
+          targetEnemy.SpawnVersion == targetSpawnVersion));
 
 
     protected override void Update()
@@ -26,7 +36,7 @@ public class Turret : AttackBase
         }
 
         // Firing logic now uses the AttackBase cooldown system
-        if (closestEnemyPosition != null && IsReady())
+        if (HasValidTarget && IsReady())
         {
             PerformAttack();
         }
@@ -34,6 +44,8 @@ public class Turret : AttackBase
 
     public override void PerformAttack()
     {
+        if (!HasValidTarget) return;
+
         ResetCooldown(); // Use the base class method to reset cooldown
 
         for (int i = 0; i < bulletNumber; i++)
@@ -52,6 +64,8 @@ public class Turret : AttackBase
     IEnumerator ShootBullet(float delay)
     {
         yield return new WaitForSeconds(delay);
+
+        if (!HasValidTarget) yield break;
 
         GameObject bullet = ObjectPoolingManager.Instance.spawnGameObject(bulletPrefab, transform.position, Quaternion.identity);
 
@@ -90,5 +104,10 @@ public class Turret : AttackBase
             }
         }
         closestEnemyPosition = closestEnemyTransform;
+        targetEnemy = closestEnemyPosition != null
+            ? closestEnemyPosition.GetComponentInParent<Enemy>()
+            : null;
+        targetIsEnemy = targetEnemy != null;
+        targetSpawnVersion = targetIsEnemy ? targetEnemy.SpawnVersion : 0;
     }
 }

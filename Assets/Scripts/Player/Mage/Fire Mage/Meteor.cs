@@ -54,6 +54,10 @@ public class Meteor : SkillProjectileBase
     // 부모의 이동 로직(Update)을 메테오 전용 낙하 로직으로 덮어씌웁니다.
     protected virtual void Update()
     {
+        var gameManager = GameManager.Instance;
+        if (gameManager == null || !gameManager.CanProcessCombat)
+            return;
+
         if (state == 0) // 경고 단계
         {
             timer -= Time.deltaTime;

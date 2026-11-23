@@ -116,13 +116,24 @@ namespace InventorySystem
         }
         public void init()
         {
-            if (!TestInstance()) return;
-            if (!TestSetup()) return;
+            if (!TryInitializeStructure())
+                return;
+
+            CheckStartMode();
+        }
+        public bool TryInitializeStructure()
+        {
+            if (!TestInstance())
+                return false;
+
+            if (!TestSetup())
+                return false;
+
             TestChildObject();
             AllignDictionaries();
             InitializeItems();
 
-            CheckStartMode();
+            return true;
         }
 
         private void CheckStartMode()
@@ -296,6 +307,58 @@ namespace InventorySystem
 
             ClearAllInventories();
             ApplyLoadPlan(loadPlan);
+        }
+        public bool TryRestoreFromData(string jsonData)
+        {
+            if (string.IsNullOrWhiteSpace(jsonData))
+                return false;
+
+            try
+            {
+                if (!TryParseInventoryData(jsonData, out InventoryData data))
+                    return false;
+
+                if (!TryBuildValidatedLoadPlan(data, out var plan))
+                    return false;
+
+                // 검증 과정에서 인벤토리나 아이템이 제외됐다면 적용하지 않는다.
+                if (plan.Count != data.inventories.Count)
+                    return false;
+
+                foreach (var saved in data.inventories)
+                {
+                    if (saved == null || saved.items == null ||
+                        string.IsNullOrEmpty(saved.inventoryName) ||
+                        !plan.TryGetValue(saved.inventoryName, out var items) ||
+                        items.Count != saved.items.Count)
+                        return false;
+                }
+
+                ApplyLoadPlan(plan);
+
+                // 추가 함수가 void이므로 실제 슬롯에 복원됐는지 확인한다.
+                foreach (var pair in plan)
+                {
+                    var slots = inventoryManager[pair.Key].GetList();
+
+                    foreach (var saved in pair.Value)
+                    {
+                        var restored = slots[saved.position];
+                        if (restored == null || restored.GetIsNull() ||
+                            restored.GetItemType() != saved.name ||
+                            restored.GetAmount() != saved.amount ||
+                            restored.GetEnhancementLevel() != saved.enhancementLevel)
+                            return false;
+                    }
+                }
+
+                return true;
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogException(exception);
+                return false;
+            }
         }
         private bool TryParseInventoryData(string jsonData, out InventoryData itemData)
         {
@@ -579,7 +642,13 @@ namespace InventorySystem
                 return new ItemAddResult(amount);
 
             Inventory source = inventoryManager[fromInventory];
-            if (!source.GetList().Contains(item)) return new ItemAddResult(amount);
+            var slots = source.GetList();
+            int pos = item.GetPosition();
+
+            if (slots == null || pos < 0 || pos >= slots.Count || !ReferenceEquals(slots[pos], item))
+            {
+                return new ItemAddResult(amount);
+            }
 
             ItemAddResult result = AddItemWithResult(toInventory, item, amount);
             int processed = result.Added + result.Converted;
@@ -613,7 +682,7 @@ namespace InventorySystem
             {
                 return;
             }
-            if (item.GetIsNull())
+            if (item == null || item.GetIsNull())
             {
                 Debug.LogError("Cannot remove null item");
                 return;

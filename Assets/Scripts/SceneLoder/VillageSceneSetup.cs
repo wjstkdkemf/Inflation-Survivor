@@ -3,19 +3,28 @@ using System.Collections;
 using InventorySystem;
 public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 {
+    public bool InitializationSucceeded { get; private set; }
+    public string InitializationError { get; private set; }
     public AudioClip MainBGM;
     public QuestUIManager questUIManager;
     public IEnumerator Initialize()
     {
+        InitializationSucceeded = false;
+        InitializationError = null;
+        if (GameManager.Instance == null)
+        {
+            InitializationError = "마을 초기화에 필요한 GameManager가 없습니다.";
+            Debug.LogError(InitializationError);
+            yield break;
+        }
         string prevScene = LoadingManager.Instance != null ? LoadingManager.Instance.PreviousSceneName : "";
-        Debug.Log($"마을 씬 초기화 시작 (이전 씬: {prevScene})");
-
-        // 공통 초기화 (어디서 왔든 무조건 해야 하는 것)
-        // 예: UI 켜기, 기본 BGM 재생
-        // UIManager.Instance.ShowHUD();
         
         // 분기 처리
-        if (prevScene == "Main Menu 1" || string.IsNullOrEmpty(prevScene))
+        if (LoadingManager.Instance != null && LoadingManager.Instance.IsFailureRecovery)
+        {
+            yield return StartCoroutine(InitFromFailedEntry());
+        }
+        else if (prevScene == "Main Menu 1" || string.IsNullOrEmpty(prevScene))
         {
             // [케이스 1] 게임을 처음 켰을 때 (타이틀 -> 마을)
             yield return StartCoroutine(InitFromTitle());
@@ -30,6 +39,10 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
             // 그 외 (상점 등에서 왔을 때)
             Debug.Log("일반 복귀 초기화 수행");
         }
+        if (!string.IsNullOrEmpty(InitializationError))
+        {
+            yield break;
+        }
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlayBGM(MainBGM);
@@ -40,6 +53,7 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
         }
 
         yield return null;
+        InitializationSucceeded = true;
     }
 
     // 게임 시작 시 초기화 (데이터 로드 위주)
@@ -49,6 +63,7 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 
         if (!AreTitleManagersReady())
         {
+            InitializationError = "마을 데이터 로드에 필요한 매니저가 없습니다.";
             yield break;
         }
 
@@ -73,7 +88,8 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 
         if (InventoryController.instance == null)
         {
-            Debug.LogError("[VillageSceneSetup] InventoryController is missing. Cannot initialize dungeon return.");
+            InitializationError = "던전 복귀 처리에 필요한 InventoryController가 없습니다.";
+            Debug.LogError(InitializationError);
             yield break;
         }
 
@@ -94,7 +110,31 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 
         yield return new WaitForSeconds(0.5f); // 연출용 딜레이
     }
+    private IEnumerator InitFromFailedEntry()
+    {
+        var controller = InventoryController.instance;
+        var inventoryManager = InventoryManager.Instance;
 
+        if (controller == null || inventoryManager == null ||
+            EquipmentEffectManager.Instance == null ||
+            !controller.TryInitializeStructure() ||
+            controller.GetInventory(InventoryController.HotBarInventoryName) == null ||
+            controller.GetInventory(InventoryController.InventoryName) == null ||
+            !inventoryManager.TryRestoreAllInventories("Current.json"))
+        {
+            InitializationError = "던전 진입 전 인벤토리를 복원하지 못했습니다.";
+            Debug.LogError(InitializationError);
+            yield break;
+        }
+
+        controller.ReapplyAllEquipmentEffects();
+        controller.SyncEquippedStatus(
+            InventoryController.HotBarInventoryName, InventoryController.InventoryName);
+        if (questUIManager != null)
+            questUIManager.RefreshAllQuestUI();
+        GameManager.Instance.ResetPause();
+        yield return null;
+    }
     private bool AreTitleManagersReady()
     {
         bool isReady = true;

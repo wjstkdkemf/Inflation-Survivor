@@ -17,7 +17,14 @@ public class TurretWeapon : WeaponBase
     // 타이머 변수들
     private float cooldownTimer;       // 공격 쿨타임 계산용
     private float targetUpdateTimer;   // 타겟 검색 최적화용
-    private Transform closestEnemyPosition;
+    private Enemy currentTarget;
+    private uint targetSpawnVersion;
+
+    private bool HasValidTarget =>
+        currentTarget != null &&
+        currentTarget.isActiveAndEnabled &&
+        currentTarget.currentNormalState != Enemy.EnemyState.Dead &&
+        currentTarget.SpawnVersion == targetSpawnVersion;
     // Keep retries isolated when a new volley overlaps an older one's delayed shots.
     private sealed class VolleyState
     {
@@ -74,7 +81,7 @@ public class TurretWeapon : WeaponBase
             targetUpdateTimer = targetUpdateRate;
         }
 
-        if (closestEnemyPosition != null && cooldownTimer <= 0f && waitingVolley == null)
+        if (HasValidTarget && cooldownTimer <= 0f && waitingVolley == null)
         {
             PerformAttack();
         }
@@ -105,7 +112,7 @@ public class TurretWeapon : WeaponBase
     {
         yield return new WaitForSeconds(delay);
 
-        while (closestEnemyPosition != null && closestEnemyPosition.gameObject.activeInHierarchy)
+        while (HasValidTarget)
         {
             if (Time.timeScale <= 0f || !TryShootBullet(damage))
             {
@@ -129,6 +136,9 @@ public class TurretWeapon : WeaponBase
 
     private bool TryShootBullet(long damage)
     {
+        if (!HasValidTarget) return false;
+
+        Transform targetTransform = currentTarget.transform;
         var pool = ObjectPoolingManager.Instance;
         if (pool == null) return false;
 
@@ -144,8 +154,8 @@ public class TurretWeapon : WeaponBase
         bulletSkill.hitRadius = currentHitRadius;
         bulletSkill.maxHits = currentMaxHits;
         bulletSkill.speed = currentProjectileSpeed;
-        bulletSkill.Fire(closestEnemyPosition.position, currentProjectileSpeed, WeaponID);
-        if (weaponVisual != null) weaponVisual.SetTarget(closestEnemyPosition);
+        bulletSkill.Fire(targetTransform.position, currentProjectileSpeed, WeaponID);
+        if (weaponVisual != null) weaponVisual.SetTarget(targetTransform);
         PlayAttackMotion();
         return true;
     }
@@ -158,9 +168,11 @@ public class TurretWeapon : WeaponBase
 
     void UpdateTarget()
     {
-        Enemy closestEnemy = EnemySwarmSystem.Instance.GetClosestEnemy(transform.position, currentRange);
-
-        closestEnemyPosition = closestEnemy != null ? closestEnemy.transform : null;
+        var swarm = EnemySwarmSystem.Instance;
+        currentTarget = swarm != null
+            ? swarm.GetClosestEnemy(transform.position, currentRange)
+            : null;
+        targetSpawnVersion = currentTarget != null ? currentTarget.SpawnVersion : 0;
     }
 
     protected override bool RecalculateLevelStats()

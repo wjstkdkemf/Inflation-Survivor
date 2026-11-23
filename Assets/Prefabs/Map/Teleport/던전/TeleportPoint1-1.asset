@@ -34,7 +34,6 @@ MonoBehaviour:
     m_FallbackState: 0
     m_WaitForCompletion: 0
     m_LocalVariables: []
-  mapIcon: {fileID: -6488581928283971615, guid: 3df21ef11d498fa48aec5ca1fe7e5a37, type: 3}
   isUnlocked: 1
   mapPosition: {x: 0, y: 0}
   mapLabel: F1
