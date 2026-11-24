@@ -112,9 +112,17 @@ public class LoadScreenManager : MonoBehaviour
     }
     public void CheckGameSaveData()
     {
-        GameSaveData saveData = SaveLoadManager.Instance.GetSaveSlotData(0); // Using a fixed slot 0
+        var state = SaveLoadManager.Instance.ReadSlot(0, out _);
+        if (state == SaveLoadManager.SlotState.Invalid)
+        {
+            const string message = "저장 데이터를 읽을 수 없습니다. 기존 저장은 유지됩니다.";
+            Debug.LogWarning(message);
+            if (LoadingManager.Instance != null)
+                LoadingManager.Instance.ShowNotice(message);
+            return;
+        }
 
-        if (saveData != null) // If save data exists (Load Game)
+        if (state == SaveLoadManager.SlotState.Valid || state == SaveLoadManager.SlotState.Backup)
         {
             SaveLoadManager.Instance.SettingMode(2); // 2 = LoadGame
             //if (UpgradeManager.Instance != null) UpgradeManager.Instance.ResetRunData();

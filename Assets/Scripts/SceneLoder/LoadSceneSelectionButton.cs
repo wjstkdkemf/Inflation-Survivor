@@ -30,7 +30,7 @@ public class LoadSceneSelectionButton : MonoBehaviour, IPointerClickHandler
         // Try to get the save data for this slot
         if (SaveLoadManager.Instance != null)
         {
-            GameSaveData saveData = SaveLoadManager.Instance.GetSaveSlotData(slotId);
+            var state = SaveLoadManager.Instance.ReadSlot(slotId, out var saveData);
 
             if (saveData != null && saveData.playerStatsData != null)
             {
@@ -43,7 +43,7 @@ public class LoadSceneSelectionButton : MonoBehaviour, IPointerClickHandler
             else
             {
                 // No save data for this slot
-                levelText.text = "Empty Slot";
+                levelText.text = state == SaveLoadManager.SlotState.Invalid ? "Unreadable Slot" : "Empty Slot";
                 if(characterImage) characterImage.enabled = false;
             }
         }

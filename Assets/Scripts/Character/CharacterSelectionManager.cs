@@ -27,12 +27,14 @@ public class CharacterSelectionManager : MonoBehaviour
     public Image icon;
     public Image Skillicon;
 
+    [SerializeField]private JobDataSO selectedTargetJob;
     private CharacterSelectionButton characterSelectionButton;
 
     [SerializeField] private StatIconDatabase statIconDatabase;
     [SerializeField] private List<CharacterScriptableObject> characterList; // List of CharacterScriptableObjects
     private string saveFilePath;
     private CharacterScriptableObject currentCharacterInfo;
+    [SerializeField] private JobTreePanelUI jobTreePanel;
 
     private void Awake()
     {
@@ -101,6 +103,9 @@ public class CharacterSelectionManager : MonoBehaviour
             return;
         }
 
+        if (currentCharacterInfo != info)
+            selectedTargetJob = null;
+
         currentCharacterInfo = info;
         characterSelectionButton = button;
         if (panle != null)
@@ -165,6 +170,15 @@ public class CharacterSelectionManager : MonoBehaviour
             }
         }
         MainStatPanel.SetStats(mainStats);
+    }
+    public void OpenJobTree()
+    {
+        jobTreePanel.Open(currentCharacterInfo, SetTargetJob);
+    }
+
+    private void SetTargetJob(JobDataSO job)
+    {
+        selectedTargetJob = job;
     }
     public void DrawSkillInfo()
     {
@@ -293,7 +307,7 @@ public class CharacterSelectionManager : MonoBehaviour
             return;
         }
 
-        PlayerStats.Instance.CharacterID = characterSelectionButton.characterInfo.Id;
+        PlayerStats.Instance.SetCharacterSelection(characterSelectionButton.characterInfo.Id, selectedTargetJob);
         //SaveLoadManager.Instance.SettingMode(1);//세 게임
     }
 
@@ -336,6 +350,10 @@ public class CharacterSelectionManager : MonoBehaviour
         }
 
         SaveCharacterData();
+    }
+    public void CancelCharacterSelection()
+    {
+        selectedTargetJob = null;
     }
     [System.Serializable]
     private class SaveDataWrapper<T>

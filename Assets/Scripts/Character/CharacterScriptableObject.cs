@@ -16,6 +16,8 @@ public class CharacterScriptableObject : ScriptableObject
     [SerializeField] private LocalizedString localizedCharacterName;
     [SerializeField] private LocalizedString localizedDescription;
     public int Id;
+    [SerializeField] private JobDataSO jobTreeRoot;
+    public JobDataSO JobTreeRoot => jobTreeRoot;
     [Header("Starting Gear")]
     // [핵심] 이 캐릭터가 시작할 때 들고 시작할 무기 데이터!
     public UpgradeScriptableObject startingWeapon; 

@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: J_Arc Element Fireball
   m_EditorClassIdentifier: 
   jobName: Arc Element
+  jobId: M_4_2
   description: 
   jobTier: 0
+  treePosition: {x: 750, y: 100}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: e77e5ccc08f0ec54d904c763c9d85b77, type: 2}
     requiredLevel: 5

@@ -6,6 +6,8 @@ public class GameSaveData
 
     // This now stores the inventory as a JSON string, not a direct object.
     public string inventoryJson;
+    public string progressJson;
+    public string questJson;
     public PowerUpSaveData powerUpData;
     public PlayerStatsData playerStatsData;
     public System.Collections.Generic.List<InventorySystem.ItemSaveData> pendingInventoryItems

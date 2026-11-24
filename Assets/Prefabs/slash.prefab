@@ -141,6 +141,7 @@ MonoBehaviour:
   damagePlayer: 0
   damageEnemy: 1
   selfDestroy: 1
+  destroyAfterHit: 1
   IsUsingObjetPooling: 0
   lifeTime: 0.4
   startWaitTime: 0.2
@@ -149,7 +150,7 @@ MonoBehaviour:
     m_Bits: 0
   enemyLayer:
     serializedVersion: 2
-    m_Bits: 256
+    m_Bits: 0
   wallLayer:
     serializedVersion: 2
     m_Bits: 0

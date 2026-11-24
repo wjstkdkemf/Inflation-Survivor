@@ -13,6 +13,45 @@ public class SaveLoadManager : MonoBehaviour
     public static SaveLoadManager Instance { get; private set; }
 
     public bool IsLoadingFromFile { get; private set; } = false;
+    private bool slotEntryPending;
+    private bool appliedBackup;
+    private string recoveredSlotJson;
+    private int recoveredSlotNumber;
+
+    public void BeginSlotEntry()
+    {
+        slotEntryPending = true;
+        appliedBackup = false;
+        recoveredSlotJson = null;
+    }
+
+    public bool TryCommitRecoveredSlot()
+    {
+        if (!slotEntryPending || !appliedBackup) return true;
+        if (string.IsNullOrEmpty(recoveredSlotJson)) return false;
+        try
+        {
+            GameProgressManager.Instance.SaveProgress();
+            QuestManager.Instance.SaveQuestData();
+            PlayerPrefs.SetString(SaveSlotKey + recoveredSlotNumber, recoveredSlotJson);
+            PlayerPrefs.Save();
+            recoveredSlotJson = null;
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+            return false;
+        }
+    }
+
+    public bool FinishSlotEntry()
+    {
+        bool notify = slotEntryPending && appliedBackup;
+        slotEntryPending = false;
+        appliedBackup = false;
+        return notify;
+    }
     public int selectedIndex { get; set; }
 
     // Temporary storage for transferring items between scenes.
@@ -47,6 +86,8 @@ public class SaveLoadManager : MonoBehaviour
 
         // Create the main save data object.
         GameSaveData saveData = new GameSaveData(invJson, powData, statsData);
+        saveData.progressJson = GameProgressManager.Instance.CaptureProgressJson();
+        saveData.questJson = QuestManager.Instance.CaptureQuestJson();
         if (InventoryManager.Instance != null)
             saveData.pendingInventoryItems = InventoryManager.Instance.GetPendingSaveData();
         SaveDataMigrator.PrepareForSave(saveData);
@@ -55,6 +96,18 @@ public class SaveLoadManager : MonoBehaviour
         // Serialize to JSON and save to PlayerPrefs.
         string jsonData = JsonUtility.ToJson(saveData, true);
         string saveKey = SaveSlotKey + slotNumber;
+        if (!SaveDataMigrator.TryReadGameSave(jsonData, out _))
+        {
+            Debug.LogError("[SaveLoadManager] Invalid save candidate; existing slot and backup retained.");
+            return;
+        }
+        string previous = PlayerPrefs.GetString(saveKey, "");
+        if (!string.IsNullOrEmpty(previous) &&
+            SaveDataMigrator.TryReadGameSave(previous, out var oldData) && oldData.saveVersion == 2)
+        {
+            PlayerPrefs.SetString(saveKey + "_Previous", previous);
+            PlayerPrefs.Save();
+        }
         PlayerPrefs.SetString(saveKey, jsonData);
         PlayerPrefs.Save();
 
@@ -64,21 +117,34 @@ public class SaveLoadManager : MonoBehaviour
         DevLog.Log($"<color=green>[SaveLoadManager]</color> Game Saved to Slot {slotNumber}.");
     }
 
-    public void LoadGame(int slotNumber)
+    public bool LoadGame(int slotNumber)
+    {
+        try { return TryApplySlot(slotNumber); }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+            return false;
+        }
+    }
+
+    private bool TryApplySlot(int slotNumber)
     {
         if (!CanLoadGame())
         {
-            return;
+            return false;
         }
 
-        GameSaveData saveData = GetSaveSlotData(slotNumber);
+        SlotState state = ReadSlot(slotNumber, out var saveData);
         DevLog.Log("[SaveLoadManager] LoadGame started.");
 
         if (saveData != null)
         {
+            if (state != SlotState.Backup)
+                GameProgressManager.Instance.LoadProgress();
             // Distribute data to the managers.
             DevLog.Log("Loading Inventory JSON: " + saveData.inventoryJson);
-            InventorySystem.InventoryController.instance.LoadFromData(saveData.inventoryJson);
+            if (!InventorySystem.InventoryController.instance.TryRestoreFromData(saveData.inventoryJson))
+                return false;
             // 불러온 장비 아이템 효과를 다시 적용합니다.
             InventorySystem.InventoryController.instance.ReapplyAllEquipmentEffects();
             InventorySystem.InventoryController.instance.ReapplyAllEquipmentSkills();
@@ -92,15 +158,27 @@ public class SaveLoadManager : MonoBehaviour
                 InventoryManager.Instance.LoadPendingSaveData(saveData.pendingInventoryItems);
                 InventoryManager.Instance.RestoreInventoryTo(InventorySystem.InventoryController.InventoryName);
             }
-            QuestManager.Instance.LoadQuestData();
+            if (state == SlotState.Backup)
+            {
+                if (!GameProgressManager.Instance.TryRestoreProgressSnapshot(saveData.progressJson) ||
+                    !QuestManager.Instance.TryRestoreQuestSnapshot(saveData.questJson))
+                    return false;
+            }
+            else QuestManager.Instance.LoadQuestData();
             IsLoadingFromFile = true; // Set the flag
+            appliedBackup = state == SlotState.Backup;
+            if (appliedBackup)
+            {
+                recoveredSlotNumber = slotNumber;
+                recoveredSlotJson = JsonUtility.ToJson(saveData);
+            }
             DevLog.Log($"<color=green>[SaveLoadManager]</color> Game Loaded from Slot {slotNumber}.");
+            return true;
         }
         else
         {
-            // No save data found, prepare for a new game.
-            Debug.LogWarning($"<color=orange>[SaveLoadManager]</color> No save data found for Slot {slotNumber}. Preparing for new game.");
-            ClearAllDataForNewGame();
+            Debug.LogError($"[SaveLoadManager] Cannot load slot {slotNumber}. Existing progress was not reset.");
+            return false;
         }
     }
 
@@ -126,6 +204,7 @@ public class SaveLoadManager : MonoBehaviour
 
     public bool CanSaveGame()
     {
+        if (slotEntryPending) return false;
         bool canSave = true;
 
         if (InventoryManager.Instance == null)
@@ -166,6 +245,11 @@ public class SaveLoadManager : MonoBehaviour
     private bool CanLoadGame()
     {
         bool canLoad = true;
+        if (GameProgressManager.Instance == null || EquipmentEffectManager.Instance == null)
+        {
+            Debug.LogError("[SaveLoadManager] Cannot load: progress or equipment manager is missing.");
+            canLoad = false;
+        }
 
         if (InventoryManager.Instance == null)
         {
@@ -199,42 +283,36 @@ public class SaveLoadManager : MonoBehaviour
 
     public GameSaveData GetSaveSlotData(int slotNumber)
     {
-        string saveKey = SaveSlotKey + slotNumber;
-
-        if (PlayerPrefs.HasKey(saveKey))
-        {
-            string jsonData = PlayerPrefs.GetString(saveKey);
-            if (string.IsNullOrEmpty(jsonData)) return null;
-
-            if (SaveDataMigrator.TryReadGameSave(jsonData, out GameSaveData saveData))
-            {
-                return saveData;
-            }
-
-            BackupInvalidSaveData(saveKey, jsonData);
-            return null;
-        }
-        else
-        {
-            return null;
-        }
+        ReadSlot(slotNumber, out var data);
+        return data;
     }
 
-    private void BackupInvalidSaveData(string saveKey, string jsonData)
+    public enum SlotState { Missing, Valid, Backup, Invalid }
+
+    public SlotState ReadSlot(int slotNumber, out GameSaveData data)
     {
-        string backupKey = saveKey + "_InvalidBackup";
-        PlayerPrefs.SetString(backupKey, jsonData);
-        PlayerPrefs.DeleteKey(saveKey);
-        PlayerPrefs.Save();
-        Debug.LogWarning($"[SaveLoadManager] Invalid save data was moved to '{backupKey}'.");
+        data = null;
+        string key = SaveSlotKey + slotNumber;
+        if (PlayerPrefs.HasKey(key) && SaveDataMigrator.TryReadGameSave(PlayerPrefs.GetString(key), out data))
+            return SlotState.Valid;
+        if (PlayerPrefs.HasKey(key + "_Previous") &&
+            SaveDataMigrator.TryReadGameSave(PlayerPrefs.GetString(key + "_Previous"), out data) &&
+            data.saveVersion == 2)
+            return SlotState.Backup;
+        data = null;
+        return PlayerPrefs.HasKey(key) || PlayerPrefs.HasKey(key + "_InvalidBackup") ||
+            PlayerPrefs.HasKey(key + "_Previous") ? SlotState.Invalid : SlotState.Missing;
     }
 
     public void DeleteSaveData(int slotNumber)
     {
         string saveKey = SaveSlotKey + slotNumber;
-        if (PlayerPrefs.HasKey(saveKey))
+        if (PlayerPrefs.HasKey(saveKey) || PlayerPrefs.HasKey(saveKey + "_InvalidBackup") ||
+            PlayerPrefs.HasKey(saveKey + "_Previous"))
         {
             PlayerPrefs.DeleteKey(saveKey);
+            PlayerPrefs.DeleteKey(saveKey + "_InvalidBackup");
+            PlayerPrefs.DeleteKey(saveKey + "_Previous");
             PlayerPrefs.Save();
             DevLog.Log($"<color=yellow>[SaveLoadManager]</color> Save data for slot {slotNumber} deleted.");
         }

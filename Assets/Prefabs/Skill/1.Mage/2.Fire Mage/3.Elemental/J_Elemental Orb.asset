@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: J_Elemental Orb
   m_EditorClassIdentifier: 
   jobName: Elemental
+  jobId: M_3_3
   description: 
   jobTier: 3
+  treePosition: {x: 500, y: 200}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: cf3fceedde3442540af6cf25771cf2ac, type: 2}
     requiredLevel: 5

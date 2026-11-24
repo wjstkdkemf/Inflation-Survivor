@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: J_Elemental
   m_EditorClassIdentifier: 
   jobName: Elemental
+  jobId: M_3_1
   description: 
   jobTier: 3
+  treePosition: {x: 500, y: 0}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: 401aa8ade2484c74e8d2c0d803ddb9c1, type: 2}
     requiredLevel: 5

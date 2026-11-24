@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: J_Fire Mage
   m_EditorClassIdentifier: 
   jobName: Fire Mage
+  jobId: M_2_1
   description: 
   jobTier: 2
+  treePosition: {x: 250, y: 0}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: 6546b45659e4e354c8c26712486b4c69, type: 2}
     requiredLevel: 5

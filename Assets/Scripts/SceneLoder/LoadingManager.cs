@@ -89,7 +89,18 @@ public class LoadingManager : MonoBehaviour
         isLoading = true;
         try
         {
+            bool isSlotEntry = returnSceneName == "Main Menu 1" && destination == "Village";
+            var saves = SaveLoadManager.Instance;
+            if (isSlotEntry && saves != null)
+                saves.BeginSlotEntry();
+
             yield return LoadSequence(destination);
+
+            if (lastLoadSucceeded && isSlotEntry && saves != null && saves.FinishSlotEntry())
+            {
+                const string backupNotice = "저장 데이터를 읽지 못해 이전 저장본으로 복구했습니다.";
+                ShowNotice(backupNotice);
+            }
 
             if (lastLoadSucceeded || pendingFailureMessage == null)
                 yield break;
@@ -122,10 +133,7 @@ public class LoadingManager : MonoBehaviour
 
             if (!string.IsNullOrEmpty(message))
             {
-                if (failureNoticePrefab != null)
-                    Instantiate(failureNoticePrefab).Show(message);
-                else
-                    Debug.LogError($"[LoadingManager] 실패 안내창 프리팹 누락: {message}");
+                ShowNotice(message);
             }
             // 복귀 성공. pendingFailureMessage는 다음 단계에서 안내창이 소비한다.
         }
@@ -135,6 +143,14 @@ public class LoadingManager : MonoBehaviour
             isLoading = false;
         }
     }
+    public void ShowNotice(string message)
+    {
+        if (failureNoticePrefab != null)
+            Instantiate(failureNoticePrefab).Show(message);
+        else
+            Debug.LogError($"[LoadingManager] 안내창 프리팹 누락: {message}");
+    }
+
     private IEnumerator LoadSequence(string sceneName)
     {
         lastLoadSucceeded = false;
@@ -242,6 +258,13 @@ public class LoadingManager : MonoBehaviour
                 }
             }
 
+            if (!IsFailureRecovery && returnSceneName == "Main Menu 1" && sceneName == "Village" &&
+                SaveLoadManager.Instance != null && !SaveLoadManager.Instance.TryCommitRecoveredSlot())
+            {
+                initializationError = "복구한 저장 데이터를 기록하지 못했습니다.";
+                Debug.LogError(initializationError);
+                yield break;
+            }
             if (progressBar != null)
                 progressBar.value = 1.0f;
             if (loadingText != null)

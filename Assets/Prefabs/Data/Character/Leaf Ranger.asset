@@ -35,6 +35,7 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   Id: 0
+  jobTreeRoot: {fileID: 11400000, guid: 62bbd637395e0df488bf658239a264e4, type: 2}
   startingWeapon: {fileID: 11400000, guid: e77e5ccc08f0ec54d904c763c9d85b77, type: 2}
   StartingDeck:
   - {fileID: 11400000, guid: 6546b45659e4e354c8c26712486b4c69, type: 2}

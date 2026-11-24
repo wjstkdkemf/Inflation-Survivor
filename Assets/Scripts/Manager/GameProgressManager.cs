@@ -79,11 +79,15 @@ public class GameProgressManager : MonoBehaviour
     // 진행 상태를 JSON 파일로 저장
     public void SaveProgress()
     {
+        File.WriteAllText(savePath, CaptureProgressJson());
+        Debug.Log("게임 진행도 저장 완료: " + savePath);
+    }
+
+    public string CaptureProgressJson()
+    {
         // HashSet은 JsonUtility로 직접 저장이 안되므로 List로 변환
         List<string> progressList = unlockedProgress.ToList();
-        string json = JsonUtility.ToJson(new Serialization<string>(progressList, CurrentProgressSaveVersion, Application.version));
-        File.WriteAllText(savePath, json);
-        Debug.Log("게임 진행도 저장 완료: " + savePath);
+        return JsonUtility.ToJson(new Serialization<string>(progressList, CurrentProgressSaveVersion, Application.version));
     }
 
     // JSON 파일에서 진행 상태 불러오기
@@ -120,6 +124,15 @@ public class GameProgressManager : MonoBehaviour
         {
             Debug.Log("저장된 진행도 파일이 없습니다. 새 게임입니다.");
         }
+    }
+
+    public bool TryRestoreProgressSnapshot(string json)
+    {
+        var data = JsonUtility.FromJson<Serialization<string>>(json);
+        if (data == null || data.items == null) return false;
+        RepairProgressSaveData(data);
+        unlockedProgress = new HashSet<string>(data.items);
+        return true;
     }
 
     private void RepairProgressSaveData(Serialization<string> data)

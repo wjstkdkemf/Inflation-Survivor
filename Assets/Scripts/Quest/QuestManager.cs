@@ -305,6 +305,11 @@ public class QuestManager : MonoBehaviour
     }
     public void SaveQuestData()
     {
+        File.WriteAllText(saveFilePath, CaptureQuestJson());
+    }
+
+    public string CaptureQuestJson()
+    {
         QuestSaveData data = new QuestSaveData {
             saveVersion = CurrentQuestSaveVersion,
             appVersion = Application.version,
@@ -313,8 +318,7 @@ public class QuestManager : MonoBehaviour
             activeSubQuests = currentSubQuests
         };
 
-        string json = JsonUtility.ToJson(data);
-        File.WriteAllText(saveFilePath, json);
+        return JsonUtility.ToJson(data);
     }
 
     public void LoadQuestData()
@@ -355,6 +359,17 @@ public class QuestManager : MonoBehaviour
         {
             AssignMainQuest("Main_Test");
         }
+    }
+
+    public bool TryRestoreQuestSnapshot(string json)
+    {
+        var data = JsonUtility.FromJson<QuestSaveData>(json);
+        if (data == null || data.activeSubQuests == null) return false;
+        RepairQuestSaveData(data);
+        currentMainQuest = data.mainQuest;
+        currentSubQuests = data.activeSubQuests;
+        mainQuestLineCompleted = data.mainQuestIsCompleted;
+        return true;
     }
 
     private void RepairQuestSaveData(QuestSaveData data)

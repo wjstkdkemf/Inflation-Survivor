@@ -13,8 +13,10 @@ MonoBehaviour:
   m_Name: J_Arc Element Orb
   m_EditorClassIdentifier: 
   jobName: Arc Element
+  jobId: M_4_3
   description: 
   jobTier: 0
+  treePosition: {x: 750, y: 200}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: 401aa8ade2484c74e8d2c0d803ddb9c1, type: 2}
     requiredLevel: 5

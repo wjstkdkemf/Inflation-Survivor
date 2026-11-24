@@ -27,6 +27,7 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
         else if (prevScene == "Main Menu 1" || string.IsNullOrEmpty(prevScene))
         {
             // [케이스 1] 게임을 처음 켰을 때 (타이틀 -> 마을)
+            InitializationError = "마을 진입 초기화가 완료되지 않았습니다.";
             yield return StartCoroutine(InitFromTitle());
         }
         else if (prevScene == "GameplayScene") // 던전 씬 이름 확인 필요
@@ -68,8 +69,17 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
         }
 
         TeleportManager.Instance.LoadData();
-        GameProgressManager.Instance.LoadProgress();
+        if (SaveLoadManager.Instance != null &&
+            SaveLoadManager.Instance.startMode != SaveLoadManager.GameStartMode.LoadGame)
+            GameProgressManager.Instance.LoadProgress();
         InventoryController.instance.init();
+        if (SaveLoadManager.Instance == null ||
+            SaveLoadManager.Instance.startMode == SaveLoadManager.GameStartMode.LoadGame ||
+            SaveLoadManager.Instance.startMode == SaveLoadManager.GameStartMode.NewGame)
+        {
+            InitializationError = "저장 데이터를 적용하지 못했습니다.";
+            yield break;
+        }
         GameManager.Instance.ResetPause();
 
         Resources.UnloadUnusedAssets();
@@ -79,6 +89,7 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 
 
         yield return new WaitForSeconds(0.5f); // 연출용 딜레이
+        InitializationError = null;
     }
 
     // 던전 복귀 시 초기화 (정산 및 저장 위주)

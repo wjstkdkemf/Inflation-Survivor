@@ -10,10 +10,16 @@ public class PlayerStats : MonoBehaviour
 {
     public static PlayerStats Instance;
     public GameObject Player;
+    public JobDataSO TargetJob { get; private set; }
     private long maxGold = 1000000;
     [SerializeField]private long goldAmount;
     public long GoldAmount => goldAmount;
     public event Action<long> OnGoldChanged;
+    public void SetCharacterSelection(int characterId, JobDataSO targetJob)
+    {
+        CharacterID = characterId;
+        TargetJob = targetJob;
+    }
     public void AddGold(long amount)
     {
         if (amount <= 0)

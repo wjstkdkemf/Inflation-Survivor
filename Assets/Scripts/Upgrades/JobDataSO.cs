@@ -6,8 +6,13 @@ public class JobDataSO : ScriptableObject
 {
     [Header("Basic Info")]
     public string jobName; // 예: Mage, Shooter
+    [SerializeField] private string jobId;// 전직 구분용 ID 나중에 수정 하지 말것
+    public string JobId => jobId;
     public string description;// 인스펙터 설명용
     public int jobTier; // 1차 , 2차 구분용
+
+    [SerializeField] private Vector2 treePosition;
+    public Vector2 TreePosition => treePosition;
 
     [System.Serializable]
     public struct JobRequirement

@@ -150,8 +150,8 @@ namespace InventorySystem
 
                 case SaveLoadManager.GameStartMode.LoadGame:
                     // 저장된 파일에서 로드
-                    SaveLoadManager.Instance.LoadGame(SaveLoadManager.Instance.selectedIndex);
-                    SaveLoadManager.Instance.SettingMode(3);
+                    if (SaveLoadManager.Instance.LoadGame(SaveLoadManager.Instance.selectedIndex))
+                        SaveLoadManager.Instance.SettingMode(3);
                     break;
 
                 case SaveLoadManager.GameStartMode.Running:
@@ -996,14 +996,10 @@ namespace InventorySystem
 
         public bool checkEnabled(string inventoryName)
         {
-            if (inventoryUIDict[inventoryName].activeSelf)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            return !string.IsNullOrEmpty(inventoryName)
+                && inventoryUIDict.TryGetValue(inventoryName, out var ui)
+                && ui != null
+                && ui.activeInHierarchy;
         }
 
         public bool checkUI(GameObject obj)

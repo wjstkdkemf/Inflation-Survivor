@@ -1,8 +1,10 @@
 using UnityEngine;
+using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 public static class SaveDataMigrator
 {
-    public const int CurrentGameSaveVersion = 1;
+    public const int CurrentGameSaveVersion = 2;
 
     public static bool TryReadGameSave(string jsonData, out GameSaveData saveData)
     {
@@ -16,6 +18,20 @@ public static class SaveDataMigrator
 
         try
         {
+            var root = JObject.Parse(jsonData);
+            int version = (int?)root["saveVersion"] ?? 0;
+            if (version > CurrentGameSaveVersion || version < 0 ||
+                !(root["playerStatsData"] is JObject) ||
+                root["inventoryJson"]?.Type != JTokenType.String ||
+                !(JObject.Parse((string)root["inventoryJson"])["inventories"] is JArray inventories))
+                return false;
+
+            if (version >= 2 &&
+                (!HasValidInventoryEntries(inventories) || !(root["powerUpData"] is JObject) ||
+                 !(JObject.Parse((string)root["progressJson"])["items"] is JArray) ||
+                 !(JObject.Parse((string)root["questJson"])["activeSubQuests"] is JArray)))
+                return false;
+
             saveData = JsonUtility.FromJson<GameSaveData>(jsonData);
         }
         catch (System.Exception exception)
@@ -31,6 +47,32 @@ public static class SaveDataMigrator
         }
 
         MigrateGameSave(saveData);
+        return true;
+    }
+
+    private static bool HasValidInventoryEntries(JArray inventories)
+    {
+        var names = new HashSet<string>();
+        foreach (var inventory in inventories)
+        {
+            if (!(inventory is JObject container) ||
+                container["inventoryName"]?.Type != JTokenType.String ||
+                string.IsNullOrWhiteSpace((string)container["inventoryName"]) ||
+                !names.Add((string)container["inventoryName"]) ||
+                !(container["items"] is JArray items))
+                return false;
+
+            var positions = new HashSet<int>();
+            foreach (var entry in items)
+            {
+                if (!(entry is JObject item) || item["name"]?.Type != JTokenType.String ||
+                    string.IsNullOrWhiteSpace((string)item["name"]) ||
+                    item["amount"]?.Type != JTokenType.Integer || (int)item["amount"] <= 0 ||
+                    item["position"]?.Type != JTokenType.Integer || (int)item["position"] < 0 ||
+                    !positions.Add((int)item["position"]))
+                    return false;
+            }
+        }
         return true;
     }
 

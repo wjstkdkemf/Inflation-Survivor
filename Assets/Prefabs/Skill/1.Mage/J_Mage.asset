@@ -13,15 +13,16 @@ MonoBehaviour:
   m_Name: J_Mage
   m_EditorClassIdentifier: 
   jobName: Mage
+  jobId: M_1_1
   description: 
   jobTier: 1
+  treePosition: {x: 0, y: 0}
   requirements:
   - requiredUpgrade: {fileID: 11400000, guid: 6546b45659e4e354c8c26712486b4c69, type: 2}
     requiredLevel: 1
   nextAbleJobs:
   - {fileID: 11400000, guid: e73f627993aca9b44b81bc531e822e5d, type: 2}
   - {fileID: 11400000, guid: 8954f6f027505d24f883da0cb257efd3, type: 2}
-  - {fileID: 11400000, guid: ec79637c5d09c18409b6219111480bfd, type: 2}
   bannedUpgrades: []
   bonusUpgrades: []
   bonusChanceAmount: 50

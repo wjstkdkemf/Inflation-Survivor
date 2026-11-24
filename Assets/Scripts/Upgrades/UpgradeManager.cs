@@ -320,6 +320,14 @@ public class UpgradeManager : MonoBehaviour
     private void SetJob(JobDataSO newJob)
     {
         currentJob = newJob;
+        var discoveries = JobDiscoveryManager.Instance;
+        var playerStats = PlayerStats.Instance;
+
+        if (discoveries != null && playerStats != null)
+            discoveries.TryDiscover(playerStats.CharacterID, newJob.JobId);
+        else
+            Debug.LogWarning("[JobDiscovery] 전직은 적용됐지만 발견 기록을 등록하지 못했습니다.");
+            
         Debug.Log($"[Job Change] {newJob.jobName} 전직 완료!");
 
         // 직업 보너스 스킬 추가
