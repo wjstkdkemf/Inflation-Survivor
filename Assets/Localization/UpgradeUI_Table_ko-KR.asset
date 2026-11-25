@@ -17,7 +17,103 @@ MonoBehaviour:
   m_SharedData: {fileID: 11400000, guid: 95a1280de5e0a1e4b9e4f46be3acf032, type: 2}
   m_Metadata:
     m_Items: []
-  m_TableData: []
+  m_TableData:
+  - m_Id: 710001
+    m_Localized: "??"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710002
+    m_Localized: "전직하면 목표 직업에 도달할 수 없습니다.\n변경할 직업: {0}\n현재 목표: {1}\n전직하시겠습니까?"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710003
+    m_Localized: "마법사"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710004
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710005
+    m_Localized: "화염 마법사"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710006
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710007
+    m_Localized: "화염 마법사 2"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710008
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710009
+    m_Localized: "엘리멘탈"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710010
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710011
+    m_Localized: "엘리멘탈"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710012
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710013
+    m_Localized: "엘리멘탈"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710014
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710015
+    m_Localized: "아크 엘리먼트"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710016
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710017
+    m_Localized: "아크 엘리먼트"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710018
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710019
+    m_Localized: "아크 엘리먼트"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710020
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710021
+    m_Localized: "셀레스티얼"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710022
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710023
+    m_Localized: "번개 마법사"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710024
+    m_Localized: ""
+    m_Metadata:
+      m_Items: []
   references:
     version: 2
     RefIds: []

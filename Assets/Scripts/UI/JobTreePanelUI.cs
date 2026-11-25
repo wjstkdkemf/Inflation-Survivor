@@ -18,6 +18,19 @@ public class JobTreePanelUI : MonoBehaviour
     private JobDataSO previewedJob;
     private System.Action<JobDataSO> onTargetConfirmed;
     private readonly Dictionary<JobDataSO, JobTreeNodeUI> nodes = new();
+    private int characterId;
+
+    private void OnEnable() => UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocaleChanged += RefreshLocale;
+    private void OnDisable() => UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocaleChanged -= RefreshLocale;
+
+    private void RefreshLocale(UnityEngine.Localization.Locale locale)
+    {
+        var discoveries = JobDiscoveryManager.Instance;
+        foreach (var pair in nodes)
+            pair.Value.RefreshLabel(pair.Key, discoveries != null && discoveries.HasDiscovered(characterId, pair.Key.JobId));
+        if (previewedJob != null)
+            ShowJobDetails(previewedJob);
+    }
 
     public void Open(CharacterScriptableObject character, System.Action<JobDataSO> onConfirm)
     {
@@ -43,7 +56,8 @@ public class JobTreePanelUI : MonoBehaviour
             return;
         }
 
-        CreateBranch(character.JobTreeRoot, character.Id);
+        characterId = character.Id;
+        CreateBranch(character.JobTreeRoot, characterId);
         DrawConnections();
         gameObject.SetActive(true);
     }
@@ -82,8 +96,8 @@ public class JobTreePanelUI : MonoBehaviour
     private void ShowJobDetails(JobDataSO job)
     {
         previewedJob = job;
-        detailName.text = job.jobName;
-        detailDescription.text = job.description;
+        detailName.text = job.LocalizedName;
+        detailDescription.text = job.LocalizedDescription;
         detailPanel.SetActive(true);
     }
     private void DrawConnections()

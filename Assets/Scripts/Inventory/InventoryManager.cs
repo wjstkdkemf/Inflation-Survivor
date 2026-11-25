@@ -267,7 +267,7 @@ public class InventoryManager : MonoBehaviour
             InventoryController.instance.ClearAllInventories();
         }
     }
-    public bool TryRestoreAllInventories(string fileName)
+    public bool TryRestoreAllInventories(string fileName, bool hotBarOnly = false)
     {
         var controller = InventoryController.instance;
         if (controller == null)
@@ -282,7 +282,7 @@ public class InventoryManager : MonoBehaviour
                 return false;
             }
 
-            return controller.TryRestoreFromData(File.ReadAllText(path));
+            return controller.TryRestoreFromData(File.ReadAllText(path), hotBarOnly);
         }
         catch (System.Exception exception)
         {

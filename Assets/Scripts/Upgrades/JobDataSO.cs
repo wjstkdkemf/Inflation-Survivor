@@ -8,6 +8,9 @@ public class JobDataSO : ScriptableObject
     public string jobName; // 예: Mage, Shooter
     [SerializeField] private string jobId;// 전직 구분용 ID 나중에 수정 하지 말것
     public string JobId => jobId;
+    private string TextKey => "job." + (string.IsNullOrEmpty(jobId) ? name : jobId);
+    public string LocalizedName => UpgradeLocalization.GetUI(TextKey + ".name", jobName);
+    public string LocalizedDescription => UpgradeLocalization.GetUI(TextKey + ".description", description);
     public string description;// 인스펙터 설명용
     public int jobTier; // 1차 , 2차 구분용
 

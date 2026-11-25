@@ -14,6 +14,7 @@ public class PlayerStats : MonoBehaviour
     private long maxGold = 1000000;
     [SerializeField]private long goldAmount;
     public long GoldAmount => goldAmount;
+    public void ClearTargetJob() => TargetJob = null;
     public event Action<long> OnGoldChanged;
     public void SetCharacterSelection(int characterId, JobDataSO targetJob)
     {

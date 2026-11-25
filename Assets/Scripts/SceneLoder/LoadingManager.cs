@@ -300,8 +300,8 @@ public class LoadingManager : MonoBehaviour
         MainMapManager.Instance?.CancelForSceneExit();
         
         var waveSpawner = WaveSpawner.Instance;
-
-        waveSpawner?.StopWaves();
+        if (waveSpawner != null)
+            waveSpawner.StopWaves();
         EnCounterSystem.Instance?.CancelEncounterForMapChange();
         ObjectPoolingManager.Instance?.ClearAllPools();
 

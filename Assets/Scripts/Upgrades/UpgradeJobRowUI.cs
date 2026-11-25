@@ -22,7 +22,7 @@ public class UpgradeJobRowUI : MonoBehaviour
         }
         spawnedItems.Clear();
 
-        jobNameText.text = job != null ? job.jobName : "";
+        jobNameText.text = job != null ? job.LocalizedName : "";
         if (job == null) return;
 
         if (job.requirements != null)

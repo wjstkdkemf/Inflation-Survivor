@@ -11,6 +11,8 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
     {
         InitializationSucceeded = false;
         InitializationError = null;
+        bool saveAfterInitialization = false;
+
         if (GameManager.Instance == null)
         {
             InitializationError = "마을 초기화에 필요한 GameManager가 없습니다.";
@@ -33,6 +35,7 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
         else if (prevScene == "GameplayScene") // 던전 씬 이름 확인 필요
         {
             // [케이스 2] 던전을 돌고 복귀했을 때 (던전 -> 마을)
+            saveAfterInitialization = true;
             yield return StartCoroutine(InitFromDungeon());
         }
         else
@@ -55,6 +58,14 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
 
         yield return null;
         InitializationSucceeded = true;
+
+        if (saveAfterInitialization)
+        {
+            if (LoadScreenManager.Instance != null)
+                LoadScreenManager.Instance.ConfirmSelectionSave();
+            else
+                Debug.LogWarning("[VillageSceneSetup] LoadScreenManager is missing. Auto-save skipped.");
+        }
     }
 
     // 게임 시작 시 초기화 (데이터 로드 위주)
@@ -104,15 +115,11 @@ public class VillageSceneSetup : MonoBehaviour, ISceneInitializer
             yield break;
         }
 
-        InventoryController.instance.init();
-
-        if (LoadScreenManager.Instance != null)
+        if (!InventoryController.instance.TryInitializeSceneTransition(returningToVillage: true))
         {
-            LoadScreenManager.Instance.ConfirmSelectionSave();
-        }
-        else
-        {
-            Debug.LogWarning("[VillageSceneSetup] LoadScreenManager is missing. Auto-save skipped.");
+            InitializationError = "던전 진입 전 인벤토리를 복원하지 못해 정산과 자동 저장을 중단했습니다.";
+            Debug.LogError(InitializationError);
+            yield break;
         }
 
         if (questUIManager != null) questUIManager.RefreshAllQuestUI();

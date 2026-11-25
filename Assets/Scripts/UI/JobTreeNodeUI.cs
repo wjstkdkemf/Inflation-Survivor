@@ -9,8 +9,13 @@ public sealed class JobTreeNodeUI : MonoBehaviour
 
     public void Bind(JobDataSO job, bool discovered, System.Action<JobDataSO> onSelected)
     {
-        label.text = discovered ? job.jobName : "??";
+        RefreshLabel(job, discovered);
         button.interactable = discovered;
         button.onClick.AddListener(() => onSelected(job));
+    }
+
+    public void RefreshLabel(JobDataSO job, bool discovered)
+    {
+        label.text = discovered ? job.LocalizedName : UpgradeLocalization.GetUI("job.unknown", "??");
     }
 }

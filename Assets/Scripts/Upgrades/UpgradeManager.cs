@@ -38,6 +38,16 @@ public class UpgradeManager : MonoBehaviour
     // 처리되지 않고 대기 중인 업그레이드 횟수
     public int pendingUpgrades = 0;
 
+    private int drawVersion;
+    private JobDataSO preferredJob;
+    private readonly List<JobDataSO> routeBuffer = new();
+    private readonly List<JobDataSO> eligibleJobs = new();
+    private readonly HashSet<JobDataSO> declinedJobs = new();
+
+    [SerializeField] private GameObject offRoutePanel;
+    [SerializeField] private TMP_Text offRouteMessage;
+    private JobDataSO pendingOffRouteJob;
+
     // 저장 경로
     private string saveUpgradeFilePath;
 
@@ -102,11 +112,17 @@ public class UpgradeManager : MonoBehaviour
 
         // 직업 상태 초기화
         currentJob = null;
+        preferredJob = null;
+        pendingOffRouteJob = null;
+        declinedJobs.Clear();
+        offRoutePanel.SetActive(false);
     }
 
     public void DisplayUpgrades()
     {
         ClearCardFocus();
+        spawnedUpgrades.Clear();
+        drawVersion++;
 
         for (int i = UpgradeDeck.Count - 1; i >= 0; i--)
         {
@@ -186,11 +202,18 @@ public class UpgradeManager : MonoBehaviour
                 UpgradeUiSlots[i].SetActive(false); // 남는 슬롯 끄기
             }
         }
+        var player = PlayerStats.Instance;
+        if (player == null || currentJob == null || player.TargetJob == null)
+            return;
+
+        CollectNextJobsTowardTarget(currentJob, player.TargetJob, routeBuffer);
+        if (TryRecommendJobCard(routeBuffer, preferredJob, out var card, out _))
+            StartCoroutine(ApplyRecommendedCardNextFrame(card));
     }
 
     public void OnUpgradeSelected(UpgradeScriptableObject chosenUpgrade)
     {
-        if (chosenUpgrade == null)
+        if (chosenUpgrade == null || pendingOffRouteJob != null)
             return;
 
         if (chosenUpgrade.IsWeaponUpgrade)
@@ -212,18 +235,14 @@ public class UpgradeManager : MonoBehaviour
         }
 
         chosenUpgrade.Points++;
+        RefreshPreferredJob();
         ClearCardFocus();
-
-        while (CheckAndSetJobClass())
-        {
-        }
-
-        ProcessNextUpgrade();
+        ResolveJobsOrContinue();
     }
     public void HandleCardClick(UpgradeUi card)
     {
         if (!InGameUpgrade || card == null ||
-            !card.isActiveAndEnabled || card.Upgrade == null)
+            !card.isActiveAndEnabled || card.Upgrade == null || pendingOffRouteJob != null)
             return;
 
         if (!UpgradeUiSlots.Contains(card.gameObject))
@@ -260,34 +279,109 @@ public class UpgradeManager : MonoBehaviour
     {
         PlayerStatsCalculate.Instance.AddRealTimeBonus(upgrade);
     }
-
-    private bool CheckAndSetJobClass()
+    private JobDataSO FindAutomaticJob(JobDataSO target)
     {
-        if (currentJob == null)
+        if (eligibleJobs.Count == 0)
+            return null;
+
+        // 최초 전직, 목표 미설정, 목표 도달 후에는 기존 자동 전직을 유지한다.
+        if (currentJob == null || target == null || currentJob == target)
+            return eligibleJobs[0];
+
+        CollectNextJobsTowardTarget(currentJob, target, routeBuffer);
+
+        JobDataSO firstOnRoute = null;
+        foreach (var job in eligibleJobs)
         {
-            foreach (JobDataSO job in allJobs)
+            if (!routeBuffer.Contains(job))
+                continue;
+
+            if (job == target)
+                return job;
+
+            if (firstOnRoute == null || job == preferredJob)
+                firstOnRoute = job;
+        }
+
+        return firstOnRoute;
+    }
+    private void ResolveJobsOrContinue()
+    {
+        while (true)
+        {
+            CollectEligibleJobs(eligibleJobs);
+
+            if (eligibleJobs.Count == 0)
             {
-                if (CheckJobRequirements(job))
-                {
-                    SetJob(job);
-                    return true;
-                }
+                ProcessNextUpgrade();
+                return;
             }
+
+            var player = PlayerStats.Instance;
+            var target = player != null ? player.TargetJob : null;
+            var automaticJob = FindAutomaticJob(target);
+
+            if (automaticJob != null)
+            {
+                SetJob(automaticJob);
+                continue;
+            }
+
+            pendingOffRouteJob = eligibleJobs[0];
+            RefreshOffRouteMessage();
+            offRoutePanel.SetActive(true);
+            return;
+        }
+    }
+    private void OnEnable() => LocalizationSettings.SelectedLocaleChanged += OnJobLocaleChanged;
+    private void OnDisable() => LocalizationSettings.SelectedLocaleChanged -= OnJobLocaleChanged;
+
+    private void OnJobLocaleChanged(UnityEngine.Localization.Locale locale) => RefreshOffRouteMessage();
+
+    private void RefreshOffRouteMessage()
+    {
+        var target = PlayerStats.Instance != null ? PlayerStats.Instance.TargetJob : null;
+        if (pendingOffRouteJob == null || target == null) return;
+        offRouteMessage.text = string.Format(UpgradeLocalization.GetUI("job.off_route"),
+            pendingOffRouteJob.LocalizedName, target.LocalizedName);
+    }
+
+    public void AnswerOffRouteJob(bool accept)
+    {
+        var job = pendingOffRouteJob;
+        if (job == null) return;
+
+        pendingOffRouteJob = null;
+        offRoutePanel.SetActive(false);
+
+        if (accept)
+        {
+            PlayerStats.Instance.ClearTargetJob();
+            SetJob(job);
         }
         else
         {
-            if(currentJob.nextAbleJobs == null || currentJob.nextAbleJobs.Count == 0) return false;
-
-            foreach (JobDataSO nextjob in currentJob.nextAbleJobs)
-            {
-                if (CheckJobRequirements(nextjob))
-                {
-                    SetJob(nextjob);
-                    return true;
-                }
-            }
+            declinedJobs.Add(job);
         }
-        return false;
+
+        ResolveJobsOrContinue();
+    }
+    private void CollectEligibleJobs(List<JobDataSO> results)
+    {
+        results.Clear();
+
+        var candidates = currentJob == null ? allJobs : currentJob.nextAbleJobs;
+        if (candidates == null)
+            return;
+
+        foreach (var job in candidates)
+        {
+            if (job == null || declinedJobs.Contains(job) || results.Contains(job))
+                continue;
+
+            if (CheckJobRequirements(job))
+                results.Add(job);
+        }
     }
 
     private bool CheckJobRequirements(JobDataSO job)
@@ -316,10 +410,152 @@ public class UpgradeManager : MonoBehaviour
         }
         return true;
     }
+    private static void CollectNextJobsTowardTarget(JobDataSO current, JobDataSO target, List<JobDataSO> results)
+    {
+        results.Clear();
 
+        if (current == null || target == null || current == target ||
+            current.nextAbleJobs == null)
+            return;
+
+        var visited = new HashSet<JobDataSO>();
+
+        foreach (var next in current.nextAbleJobs)
+        {
+            if (next == null || results.Contains(next))
+                continue;
+
+            visited.Clear();
+            visited.Add(current);
+
+            if (CanReachJob(next, target, visited))
+                results.Add(next);
+        }
+    }
+    private bool TryScoreJobCard(JobDataSO job, UpgradeScriptableObject card, out int remaining)
+    {
+        return TryCalculateRemaining(job, card, out remaining, out bool helps) && helps;
+    }
+    private bool TryCalculateRemaining(JobDataSO job, UpgradeScriptableObject extraCard,
+                                    out int remaining, out bool helps)
+    {
+        remaining = 0;
+        helps = false;
+        if (job == null || job.requirements == null) return false;
+
+        foreach (var req in job.requirements)
+        {
+            if (req.requiredUpgrade == null) return false;
+
+            var owned = MasterDeck.Find(c => c != null && c.name == req.requiredUpgrade.name);
+            if (owned == null) return false;
+
+            int missing = Mathf.Max(0, req.requiredLevel - owned.Points);
+            if (missing > 0 && extraCard != null && extraCard.name == owned.name)
+            {
+                missing--;
+                helps = true;
+            }
+            remaining += missing;
+        }
+        return true;
+    }
+    private void RefreshPreferredJob()
+    {
+        var player = PlayerStats.Instance;
+        if (player == null || currentJob == null || player.TargetJob == null)
+            return;
+
+        CollectNextJobsTowardTarget(currentJob, player != null ? player.TargetJob : null, routeBuffer);
+
+        JobDataSO best = null;
+        int bestRemaining = int.MaxValue;
+        foreach (var route in routeBuffer)
+        {
+            if (!TryCalculateRemaining(route, null, out int remaining, out _)) continue;
+
+            if (best == null || remaining < bestRemaining ||
+                (remaining == bestRemaining && route == preferredJob))
+            {
+                best = route;
+                bestRemaining = remaining;
+            }
+        }
+        preferredJob = best;
+    }
+    private bool TryRecommendJobCard(List<JobDataSO> routes, JobDataSO preferredJob,
+                                    out UpgradeScriptableObject bestCard, out JobDataSO bestJob)
+    {
+        bestCard = null;
+        bestJob = null;
+
+        bool bestIsPreferred = false;
+        int bestRemaining = int.MaxValue;
+
+        foreach (var card in spawnedUpgrades)
+        {
+            foreach (var job in routes)
+            {
+                if (!TryScoreJobCard(job, card, out int remaining))
+                    continue;
+
+                bool isPreferred = job == preferredJob;
+
+                bool isBetter = bestCard == null
+                            || remaining < bestRemaining
+                            || (remaining == bestRemaining && isPreferred && !bestIsPreferred);
+
+                if (!isBetter)
+                    continue;
+
+                bestCard = card;
+                bestJob = job;
+                bestIsPreferred = isPreferred;
+                bestRemaining = remaining;
+            }
+        }
+
+        return bestCard != null;
+    }
+    private static bool CanReachJob(JobDataSO job, JobDataSO target, HashSet<JobDataSO> visited)
+    {
+        if (job == null || !visited.Add(job))
+            return false;
+
+        if (job == target)
+            return true;
+
+        if (job.nextAbleJobs == null)
+            return false;
+
+        foreach (var next in job.nextAbleJobs)
+        {
+            if (CanReachJob(next, target, visited))
+                return true;
+        }
+
+        return false;
+    }
+    private System.Collections.IEnumerator ApplyRecommendedCardNextFrame(UpgradeScriptableObject card)
+    {
+        int version = drawVersion;
+        yield return null;
+
+        if (version != drawVersion || !InGameUpgrade || !spawnedUpgrades.Contains(card))
+            yield break;
+
+        OnUpgradeSelected(card);
+    }
     private void SetJob(JobDataSO newJob)
     {
         currentJob = newJob;
+        
+        var player = PlayerStats.Instance;
+        if (player != null && player.TargetJob == newJob)
+            player.ClearTargetJob();
+
+        preferredJob = null;
+        declinedJobs.Clear();
         var discoveries = JobDiscoveryManager.Instance;
         var playerStats = PlayerStats.Instance;
 
@@ -408,6 +644,8 @@ public class UpgradeManager : MonoBehaviour
         
         SetUpgradePanelState(false);
         spawnedUpgrades.Clear();
+        pendingOffRouteJob = null;
+        offRoutePanel.SetActive(false);
     }
     public void AddPendingUpgrade()
     {

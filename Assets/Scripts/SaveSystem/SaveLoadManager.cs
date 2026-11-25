@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 using Unity.VisualScripting;
 
 public class SaveLoadManager : MonoBehaviour
@@ -205,6 +206,8 @@ public class SaveLoadManager : MonoBehaviour
     public bool CanSaveGame()
     {
         if (slotEntryPending) return false;
+        if (!IsVillageReadyForSave()) return false;
+        
         bool canSave = true;
 
         if (InventoryManager.Instance == null)
@@ -285,6 +288,22 @@ public class SaveLoadManager : MonoBehaviour
     {
         ReadSlot(slotNumber, out var data);
         return data;
+    }
+    private bool IsVillageReadyForSave()
+    {
+        Scene scene = SceneManager.GetActiveScene();
+        if (scene.name != "Village")
+            return true;
+
+        foreach (GameObject root in scene.GetRootGameObjects())
+        {
+            var setup = root.GetComponentInChildren<VillageSceneSetup>(true);
+            if (setup != null)
+                return setup.InitializationSucceeded;
+        }
+
+        // 마을인데 초기화 담당자가 없다면 정상 데이터라고 보장할 수 없다.
+        return false;
     }
 
     public enum SlotState { Missing, Valid, Backup, Invalid }

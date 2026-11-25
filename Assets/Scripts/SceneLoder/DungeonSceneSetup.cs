@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using InventorySystem;
 
 public class DungeonSceneSetup : MonoBehaviour, ISceneInitializer
 {
@@ -36,7 +37,12 @@ public class DungeonSceneSetup : MonoBehaviour, ISceneInitializer
         
         ObjectPoolingManager.Instance.PrewarmDamageText(100);
         
-        InventorySystem.InventoryController.instance.init();
+        if (!InventoryController.instance.TryInitializeSceneTransition(returningToVillage: false))
+        {
+            InitializationError = "인벤토리를 복원하지 못해 던전 진입을 중단했습니다.";
+            Debug.LogError(InitializationError);
+            yield break;
+        }
 
         GameObject player = GameManager.Instance.Player;
         if (player == null)

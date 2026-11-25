@@ -14,7 +14,103 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_TableCollectionName: UpgradeUI_Table
   m_TableCollectionNameGuidString: 95a1280de5e0a1e4b9e4f46be3acf032
-  m_Entries: []
+  m_Entries:
+  - m_Id: 710001
+    m_Key: "job.unknown"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710002
+    m_Key: "job.off_route"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710003
+    m_Key: "job.M_1_1.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710004
+    m_Key: "job.M_1_1.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710005
+    m_Key: "job.M_2_1.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710006
+    m_Key: "job.M_2_1.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710007
+    m_Key: "job.M_2_2.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710008
+    m_Key: "job.M_2_2.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710009
+    m_Key: "job.M_3_1.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710010
+    m_Key: "job.M_3_1.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710011
+    m_Key: "job.M_3_2.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710012
+    m_Key: "job.M_3_2.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710013
+    m_Key: "job.M_3_3.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710014
+    m_Key: "job.M_3_3.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710015
+    m_Key: "job.M_4_1.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710016
+    m_Key: "job.M_4_1.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710017
+    m_Key: "job.M_4_2.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710018
+    m_Key: "job.M_4_2.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710019
+    m_Key: "job.M_4_3.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710020
+    m_Key: "job.M_4_3.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710021
+    m_Key: "job.M_5_1.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710022
+    m_Key: "job.M_5_1.description"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710023
+    m_Key: "job.J_Lightning Mage.name"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 710024
+    m_Key: "job.J_Lightning Mage.description"
+    m_Metadata:
+      m_Items: []
   m_Metadata:
     m_Items: []
   m_KeyGenerator:

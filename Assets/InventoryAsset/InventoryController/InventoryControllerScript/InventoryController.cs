@@ -160,6 +160,35 @@ namespace InventorySystem
                     break;
             }
         }
+    public bool TryInitializeSceneTransition(bool returningToVillage)
+    {
+        var manager = InventoryManager.Instance;
+        if (manager == null || !TryInitializeStructure())
+            return false;
+            
+        if (!manager.TryRestoreAllInventories("Current.json", hotBarOnly: !returningToVillage))
+            return false;
+
+        if (returningToVillage)
+        {
+            manager.RestoreInventoryTo(InventoryName);
+            ReapplyAllEquipmentEffects();
+            SyncEquippedStatus(HotBarInventoryName, InventoryName);
+        }
+        else
+        {
+            manager.BeginDungeonInventoryTracking();
+            CopyEquippedItemsToInventory(HotBarInventoryName, ClearInventoryName);
+            ReapplyAllEquipmentEffects();
+            ReapplyAllEquipmentSkills();
+
+            var upgrades = UpgradeManager.Instance;
+            if (upgrades != null && upgrades.playerWeaponController != null)
+                upgrades.playerWeaponController.ToggleCombatMode(false);
+        }
+
+        return true;
+    }
 
         private void HandleSceneTransition()
         {
@@ -308,7 +337,7 @@ namespace InventorySystem
             ClearAllInventories();
             ApplyLoadPlan(loadPlan);
         }
-        public bool TryRestoreFromData(string jsonData)
+        public bool TryRestoreFromData(string jsonData, bool hotBarOnly = false)
         {
             if (string.IsNullOrWhiteSpace(jsonData))
                 return false;
@@ -317,6 +346,20 @@ namespace InventorySystem
             {
                 if (!TryParseInventoryData(jsonData, out InventoryData data))
                     return false;
+
+                if (hotBarOnly)
+                {
+                    var hotBars = data.inventories.FindAll(
+                        entry => entry != null && entry.inventoryName == HotBarInventoryName);
+
+                    if (hotBars.Count != 1 || hotBars[0].items == null)
+                    {
+                        Debug.LogError("[InventoryController] 던전 반입용 HotBar 데이터가 없거나 잘못됐습니다.");
+                        return false;
+                    }
+
+                    data.inventories = hotBars;
+                }
 
                 if (!TryBuildValidatedLoadPlan(data, out var plan))
                     return false;
@@ -426,9 +469,12 @@ namespace InventorySystem
 
             return true;
         }
-        private void ApplyLoadPlan(Dictionary<string, List<ItemSaveData>> loadPlan)
+        private void ApplyLoadPlan(Dictionary<string, List<ItemSaveData>> loadPlan,  bool hotBarOnly = false)
         {
-            ClearAllInventories();
+            if (hotBarOnly)
+                inventoryManager[HotBarInventoryName].Clear();
+            else
+                ClearAllInventories();
 
             foreach (var pair in loadPlan)
             {
